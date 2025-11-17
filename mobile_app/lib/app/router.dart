@@ -7,6 +7,7 @@ import '../features/sales/sales_summary_page.dart';
 import '../features/revenue/revenue_page.dart';
 import '../features/weekly/weekly_schedule_page.dart';
 import '../features/schedule_ai/schedule_ai_page.dart';
+import '../features/settings/settings_page.dart';
 
 GoRouter createRouter() {
   return GoRouter(
@@ -19,6 +20,7 @@ GoRouter createRouter() {
       GoRoute(path: '/revenue', builder: (context, state) => const RevenuePage()),
       GoRoute(path: '/weekly', builder: (context, state) => const WeeklySchedulePage()),
       GoRoute(path: '/schedule-ai', builder: (context, state) => const ScheduleAIPage()),
+      GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
     ],
   );
 }

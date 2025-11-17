@@ -1,12 +1,24 @@
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/config.dart';
 
 class ApiClient {
   ApiClient._();
   static final Dio _dio = Dio();
+  static String _base = AppConfig.apiBase;
+  static Future<void> initFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getString('api_base');
+    if (v != null && v.isNotEmpty) {
+      _base = v;
+    }
+  }
+  static void setBase(String base) {
+    _base = base;
+  }
 
   static String _buildUrl(String path) {
-    final base = (AppConfig.apiBase).trim();
+    final base = (_base).trim();
     final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
     final p = path.startsWith('/') ? path.substring(1) : path;
     return '$b/$p';

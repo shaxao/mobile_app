@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>商品销售数据</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --card: #fff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --border: #e5e7eb;
+      --danger: #dc2626;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section:last-child {
+      border-bottom: 0;
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .grid .full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input[type="date"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+      background: #fff;
+      color: var(--text);
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    button.outline {
+      background: #fff;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .thead {
+      background: #f4f5f7;
+    }
+
+    .thead th {
+      text-align: left;
+      font-weight: 600;
+      color: var(--muted);
+      padding: 10px;
+      font-size: 12px;
+    }
+
+    .row {
+      border-top: 1px solid var(--border);
+    }
+
+    .row:hover {
+      background: #fafafa;
+    }
+
+    .row td {
+      padding: 10px;
+    }
+
+    .col-id {
+      width: 140px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    .col-name {
+      width: 280px;
+    }
+
+    .col-price,
+    .col-sales,
+    .col-avg {
+      width: 160px;
+    }
+
+    .expand {
+      color: var(--primary);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .details {
+      background: #fafafa;
+      border-top: 1px dashed var(--border);
+      display: none;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding: 8px 0;
+    }
+
+    .kv .item {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .kv .item span {
+      color: var(--text);
+      font-weight: 600;
+      margin-left: 6px;
+    }
+
+    .empty {
+      padding: 18px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .error {
+      color: var(--danger);
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="section">
+        <div class="title">查询参数</div>
+        <div class="grid">
+          <div>
+            <label>查询模式</label>
+            <select id="seldate">
+              <option value="0">按具体日期</option>
+              <option value="3">按起止日期</option>
+            </select>
+          </div>
+          <div id="chooseDateWrap">
+            <label>查询日期</label>
+            <input id="chooseDate" type="date" />
+          </div>
+          <div class="status" id="statusText"></div>
+
+          <div id="rangeStartWrap" style="display:none;">
+            <label>起始日期</label>
+            <input id="startDate" type="date" />
+          </div>
+          <div id="rangeEndWrap" style="display:none;">
+            <label>终止日期</label>
+            <input id="endDate" type="date" />
+          </div>
+          <div class="actions">
+            <button class="primary" id="btnQuery">查询</button>
+            <button class="outline" id="btnReset">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="title">批量筛选菜名（每行一个）</div>
+        <div class="grid">
+          <div class="full">
+            <textarea id="filterNames" placeholder="例：\n金枪鱼色拉\n牛肉饭\n寿司拼盘"></textarea>
+          </div>
+          <div class="actions">
+            <button id="btnApplyFilter">应用筛选</button>
+            <button id="btnClearFilter">清空筛选</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="title">商品列表</div>
+        <div id="error" class="error"></div>
+        <table class="table">
+          <thead class="thead">
+            <tr>
+              <th style="width:40px;">展开</th>
+              <th class="col-id">商品编号</th>
+              <th class="col-name">商品名</th>
+              <th class="col-price">价格</th>
+              <th class="col-sales">销售数</th>
+              <th class="col-avg">日平均销售数</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div id="empty" class="empty" style="display:none;">暂无数据</div>
+      </div>
+
+      <div class="section">
+        <div class="title">原材料使用统计（基于当前筛选结果）</div>
+        <table class="table">
+          <thead class="thead">
+            <tr>
+              <th>原材料</th>
+              <th>单位</th>
+              <th>总用量</th>
+            </tr>
+          </thead>
+          <tbody id="ingTbody"></tbody>
+        </table>
+        <div id="ingEmpty" class="empty" style="display:none;">暂无可统计的原材料</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const apiBase = location.origin;
+    let allProducts = [];
+    let viewProducts = [];
+
+    function ymdFromDateInput(el) {
+      const v = el.value; // yyyy-mm-dd
+      if (!v) return '';
+      return v.replaceAll('-', '');
+    }
+
+    function setMode(mode) {
+      const isDate = String(mode) === '0';
+      document.getElementById('chooseDateWrap').style.display = isDate ? 'block' : 'none';
+      document.getElementById('rangeStartWrap').style.display = isDate ? 'none' : 'block';
+      document.getElementById('rangeEndWrap').style.display = isDate ? 'none' : 'block';
+    }
+
+    function render() {
+      const tbody = document.getElementById('tbody');
+      const empty = document.getElementById('empty');
+      tbody.innerHTML = '';
+      if (!viewProducts || viewProducts.length === 0) {
+        empty.style.display = 'block';
+        renderIngredients([]);
+        return;
+      }
+      empty.style.display = 'none';
+
+      viewProducts.forEach((p, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'row';
+        tr.innerHTML = `
+          <td class="expand" data-idx="${idx}">▶</td>
+          <td class="col-id">${p.product_id || ''}</td>
+          <td class="col-name">${p.product_name || ''}</td>
+          <td class="col-price">${p.price || ''}</td>
+          <td class="col-sales">${p.sales_number || ''}</td>
+          <td class="col-avg">${p.avg_sales_per_day || ''}</td>
+        `;
+        tbody.appendChild(tr);
+
+        const detailsTr = document.createElement('tr');
+        detailsTr.className = 'row details';
+        detailsTr.style.display = 'none';
+        const d = p.details || {};
+        const recipe = p.recipe || {};
+        const recipeLines = Array.isArray(recipe.lines) ? recipe.lines : [];
+        detailsTr.innerHTML = `
+          <td colspan="6">
+            <div style="padding:8px 0;">
+              <div style="font-weight:600; margin-bottom:6px;">菜谱制作方法</div>
+              ${recipeLines.length > 0 ? `
+                <ul style="margin:0; padding-left:18px;">
+                  ${recipeLines.map(x => `<li>${x}</li>`).join('')}
+                </ul>
+              ` : '<div class="item">暂无菜谱</div>'}
+            </div>
+            <div class="kv">
+              <div class="item">标准原价 <span>${d['标准原价'] || ''}</span></div>
+              <div class="item">原价率 <span>${d['原价率'] || ''}</span></div>
+              <div class="item">UPT <span>${d['UPT'] || ''}</span></div>
+              <div class="item">USTT <span>${d['USTT'] || ''}</span></div>
+              <div class="item">总销售金额 <span>${d['总销售金额'] || ''}</span></div>
+              <div class="item">销售金额构成比 <span>${d['销售金额构成比'] || ''}</span></div>
+              <div class="item">标准成本 <span>${d['标准成本'] || ''}</span></div>
+              <div class="item">成本构成比 <span>${d['成本构成比'] || ''}</span></div>
+              <div class="item">毛利额 <span>${d['毛利额'] || ''}</span></div>
+              <div class="item">毛利额构成比 <span>${d['毛利额构成比'] || ''}</span></div>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(detailsTr);
+
+        tr.querySelector('.expand').addEventListener('click', () => {
+          const visible = detailsTr.style.display === 'table-row';
+          detailsTr.style.display = visible ? 'none' : 'table-row';
+          tr.querySelector('.expand').textContent = visible ? '▶' : '▼';
+        });
+      });
+
+      // 渲染原材料汇总
+      renderIngredients(viewProducts);
+    }
+
+    function parseSalesNumber(v) {
+      if (v == null) return 0;
+      const s = String(v).replace(/,/g, '').trim();
+      const n = Number(s);
+      return isNaN(n) ? 0 : n;
+    }
+
+    function renderIngredients(products) {
+      const tbody = document.getElementById('ingTbody');
+      const empty = document.getElementById('ingEmpty');
+      tbody.innerHTML = '';
+
+      const agg = new Map(); // key = name|unit -> total
+      const processedSet = new Set(['肉酱', '加工去皮茄', '加工去皮切', '去皮切', '土豆泥备份', '白沙司', '榴莲酱', '多利亚饭', '明太子奶油酱', '奶酪汁', '薯饼备份']);
+      for (const p of (products || [])) {
+        const recipe = p.recipe;
+        const sales = parseSalesNumber(p.sales_number);
+        const baseIngs = recipe && Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+        const expanded = recipe && Array.isArray(recipe.ingredients_expanded) ? recipe.ingredients_expanded : [];
+        const ings = expanded.length > 0 ? expanded : baseIngs;
+        for (const ing of ings) {
+          const name = ing.name || '';
+          const unit = ing.unit || '';
+          const amount = typeof ing.amount === 'number' ? ing.amount : Number(ing.amount);
+          if (!name || !unit || !amount || !sales) continue;
+          // 只统计底层原料；如仍为备份类中间件则跳过
+          if (processedSet.has(name)) continue;
+          const key = `${name}|${unit}`;
+          const prev = agg.get(key) || 0;
+          agg.set(key, prev + amount * sales);
+        }
+      }
+
+      if (agg.size === 0) {
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      for (const [key, total] of agg.entries()) {
+        const [name, unit] = key.split('|');
+        const tr = document.createElement('tr');
+        tr.className = 'row';
+        tr.innerHTML = `
+          <td>${name}</td>
+          <td>${unit}</td>
+          <td>${Number(total.toFixed(3))}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function applyFilter() {
+      const raw = document.getElementById('filterNames').value || '';
+      const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(s => s.length > 0);
+      if (lines.length === 0) {
+        viewProducts = [...allProducts];
+      } else {
+        const set = new Set(lines);
+        viewProducts = allProducts.filter(p => {
+          // 名称包含任意一行（包含匹配）
+          return Array.from(set).some(s => (p.product_name || '').includes(s));
+        });
+      }
+      render();
+    }
+
+    async function fetchProducts() {
+      document.getElementById('error').textContent = '';
+      document.getElementById('statusText').textContent = '正在查询...';
+      const mode = document.getElementById('seldate').value;
+      const body = { seldate: Number(mode) };
+      if (mode === '0') {
+        const cd = ymdFromDateInput(document.getElementById('chooseDate'));
+        if (!cd) { document.getElementById('error').textContent = '请选择查询日期'; return; }
+        body.chooseData = cd;
+      } else {
+        const sd = ymdFromDateInput(document.getElementById('startDate'));
+        const ed = ymdFromDateInput(document.getElementById('endDate'));
+        if (!sd || !ed) { document.getElementById('error').textContent = '请选择起始与终止日期'; return; }
+        body.custom_start_date = sd;
+        body.custom_end_date = ed;
+      }
+      try {
+        const resp = await fetch(`${apiBase}/api/products`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const json = await resp.json();
+        allProducts = json.data || [];
+        viewProducts = [...allProducts];
+        document.getElementById('statusText').textContent = `共 ${viewProducts.length} 条记录`;
+        render();
+      } catch (e) {
+        document.getElementById('error').textContent = `查询失败：${e.message}`;
+        document.getElementById('statusText').textContent = '';
+        allProducts = [];
+        viewProducts = [];
+        render();
+      }
+    }
+
+    // 初始化事件
+    document.getElementById('seldate').addEventListener('change', (e) => setMode(e.target.value));
+    document.getElementById('btnQuery').addEventListener('click', fetchProducts);
+    document.getElementById('btnReset').addEventListener('click', () => {
+      document.getElementById('chooseDate').value = '';
+      document.getElementById('startDate').value = '';
+      document.getElementById('endDate').value = '';
+      document.getElementById('filterNames').value = '';
+      allProducts = [];
+      viewProducts = [];
+      document.getElementById('statusText').textContent = '';
+      render();
+    });
+    document.getElementById('btnApplyFilter').addEventListener('click', applyFilter);
+    document.getElementById('btnClearFilter').addEventListener('click', () => {
+      document.getElementById('filterNames').value = '';
+      applyFilter();
+    });
+
+    // 默认模式为具体日期
+    setMode('0');
+  </script>
+</body>
+
+</html>

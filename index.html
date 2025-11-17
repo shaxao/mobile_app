@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>员工报班数据识别助手</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    body {
+      background-color: #1a1a1a;
+      font-family: 'Roboto', Arial, sans-serif;
+      color: #fff;
+    }
+
+    .container {
+      max-width: 1200px;
+      padding: 2rem;
+    }
+
+    .btn {
+      position: relative;
+      overflow: hidden;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      background: linear-gradient(145deg, #2a2a2a, #232323);
+      box-shadow: 5px 5px 10px #1a1a1a, -5px -5px 10px #343434;
+      color: #fff;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.3s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 7px 7px 14px #1a1a1a, -7px -7px 14px #343434;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+      box-shadow: inset 5px 5px 10px #1a1a1a, inset -5px -5px 10px #343434;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: 0.5s;
+    }
+
+    .btn:hover::before {
+      left: 100%;
+    }
+
+    .btn-primary {
+      background: linear-gradient(145deg, #007bff, #0056b3);
+    }
+
+    .btn-success {
+      background: linear-gradient(145deg, #28a745, #1e7e34);
+    }
+
+    #loading {
+      display: none;
+      font-size: 24px;
+      color: #007bff;
+      text-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+
+      100% {
+        opacity: 1;
+      }
+    }
+
+    .schedule-table {
+      margin-top: 30px;
+      width: 100%;
+      background: #2a2a2a;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .schedule-table th {
+      background: #343434;
+      color: #fff;
+      padding: 15px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .schedule-table td:first-child {
+      color: #fff;
+      font-weight: bold;
+    }
+
+    @media screen and (max-width: 768px) {
+      .schedule-table {
+        position: relative;
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .schedule-table thead th:first-child,
+      .schedule-table tbody td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background: #2a2a2a;
+      }
+
+      .schedule-table thead th:first-child {
+        z-index: 3;
+        background: #343434;
+      }
+
+      .time-input {
+        width: 100%;
+        margin-bottom: 4px;
+        font-size: 14px;
+        padding: 4px 2px;
+        min-width: 45px;
+        text-align: center;
+      }
+
+      .time-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 60px;
+        padding: 4px;
+      }
+
+      .schedule-table td {
+        padding: 8px 4px;
+      }
+    }
+
+    .schedule-table td {
+      padding: 12px;
+      border: 1px solid #404040;
+      transition: background-color 0.3s ease;
+    }
+
+    .schedule-table tr:hover td {
+      background-color: #333;
+    }
+
+    .time-input {
+      width: 45%;
+      background: #404040;
+      border: 1px solid #505050;
+      color: #fff;
+      padding: 8px;
+      border-radius: 4px;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+
+    .time-input:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    }
+
+    .invalid-time {
+      border-color: #dc3545;
+      background-color: #481f24;
+      animation: shake 0.5s;
+    }
+
+    @keyframes shake {
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      25% {
+        transform: translateX(-5px);
+      }
+
+      75% {
+        transform: translateX(5px);
+      }
+    }
+
+    .fireworks {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.8);
+      font-size: 48px;
+      animation: zoomIn 0.5s ease-out;
+    }
+
+    @keyframes zoomIn {
+      from {
+        transform: scale(0);
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1 class="text-center mt-5">员工报班数据识别助手</h1>
+    <textarea id="inputData" class="form-control mt-3" rows="10" placeholder="粘贴员工报班数据..."></textarea>
+    <button id="submitBtn" class="btn btn-primary mt-3">提交</button>
+    <button id="confirmBtn" class="btn btn-success">确认排班</button>
+    <div id="loading" class="text-center mt-3">AI识别中，请稍候...</div>
+    <div id="scheduleTable" class="mt-3"></div>
+    <div class="fireworks" id="fireworks">🎆🎇🎉 修改完成！</div>
+    <div id="particles-js"></div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti"></script>
+  <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+  <script>
+    let scheduleData = null;
+
+    function formatTime(time) {
+      if (!time) return '';
+      // 检测是否为移动设备
+      if (window.innerWidth <= 768) {
+        return formatMobileTime(time);
+      }
+      return time.substring(0, 2) + ':' + time.substring(2);
+    }
+
+    function formatMobileTime(time) {
+      if (!time) return '';
+      // 移动设备上只显示小时部分，并去掉前导零
+      const hour = parseInt(time.substring(0, 2));
+      return hour.toString();
+    }
+
+    function unformatTime(time) {
+      if (!time) return '';
+      return time.replace(':', '');
+    }
+
+    function validateTime(time) {
+      if (!time) return true;
+      // 检测是否为移动设备
+      if (window.innerWidth <= 768) {
+        // 移动端只验证小时部分
+        const hour = parseInt(time);
+        return !isNaN(hour) && hour >= 0 && hour <= 23;
+      }
+      // 桌面端验证完整时间格式
+      const timePattern = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
+      return timePattern.test(time);
+    }
+
+    function createScheduleTable(data) {
+      const weekDays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
+      let table = '<table class="schedule-table table table-bordered">';
+
+      // 表头
+      table += '<thead><tr><th>员工姓名</th>';
+      weekDays.forEach(day => {
+        table += `<th>${day}</th>`;
+      });
+      table += '</tr></thead><tbody>';
+
+      // 表格内容
+      for (let name in data) {
+        table += `<tr><td>${name}</td>`;
+        for (let i = 1; i <= 7; i++) {
+          const startTime = data[name][`startTime${i}`] || '';
+          const endTime = data[name][`endTime${i}`] || '';
+          table += `<td><div class="time-cell">
+            <input type="text" class="time-input" 
+              data-name="${name}" 
+              data-type="start" 
+              data-day="${i}" 
+              value="${formatTime(startTime)}" 
+              placeholder="开始时间">
+            <input type="text" class="time-input" 
+              data-name="${name}" 
+              data-type="end" 
+              data-day="${i}" 
+              value="${formatTime(endTime)}" 
+              placeholder="结束时间">
+          </div></td>`;
+        }
+        table += '</tr>';
+      }
+
+      table += '</tbody></table>';
+      return table;
+    }
+
+    function updateScheduleData(input) {
+      const name = input.dataset.name;
+      const type = input.dataset.type;
+      const day = input.dataset.day;
+      const value = unformatTime(input.value);
+
+      if (!scheduleData[name]) {
+        scheduleData[name] = {};
+      }
+
+      const timeKey = `${type}Time${day}`;
+      scheduleData[name][timeKey] = value;
+    }
+
+    document.addEventListener('input', function (e) {
+      if (e.target.classList.contains('time-input')) {
+        const input = e.target;
+        const timeValue = input.value;
+
+        if (validateTime(timeValue) || timeValue === '') {
+          input.classList.remove('invalid-time');
+          updateScheduleData(input);
+        } else {
+          input.classList.add('invalid-time');
+        }
+      }
+    });
+
+    const baseUrl = 'https://paiban.saliya.top'
+
+    document.getElementById('submitBtn').onclick = async function () {
+      const inputData = document.getElementById('inputData').value;
+      document.getElementById('loading').style.display = 'block';
+
+      try {
+        const response = await fetch(`${baseUrl}/api/recognize`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ data: inputData })
+        });
+
+        scheduleData = await response.json();
+        document.getElementById('scheduleTable').innerHTML = createScheduleTable(scheduleData);
+        document.getElementById('confirmBtn').style.display = 'block';
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('scheduleTable').innerHTML = '发生错误：' + error.message;
+      } finally {
+        document.getElementById('loading').style.display = 'none';
+      }
+    };
+
+    document.getElementById('confirmBtn').onclick = async function () {
+      if (!scheduleData) return;
+
+      // 验证所有时间输入
+      const inputs = document.querySelectorAll('.time-input');
+      let hasError = false;
+      inputs.forEach(input => {
+        if (input.value && !validateTime(input.value)) {
+          input.classList.add('invalid-time');
+          hasError = true;
+        }
+      });
+
+      if (hasError) {
+        alert('请修正无效的时间格式（HH:MM）');
+        return;
+      }
+
+      try {
+        // 显示加载提示
+        document.getElementById('loading').textContent = '正在提交排班数据...';
+        document.getElementById('loading').style.display = 'block';
+
+        const response = await fetch(`${baseUrl}/api/confirm`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(scheduleData)
+        });
+
+        const result = await response.json();
+
+        // 隐藏加载提示
+        document.getElementById('loading').style.display = 'none';
+
+        if (result.success) {
+          // 显示成功动画
+          const duration = 3000;
+          const animationEnd = Date.now() + duration;
+          const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+          function randomInRange(min, max) {
+            return Math.random() * (max - min) + min;
+          }
+
+          const interval = setInterval(function () {
+            const timeLeft = animationEnd - Date.now();
+
+            if (timeLeft <= 0) {
+              return clearInterval(interval);
+            }
+
+            const particleCount = 50 * (timeLeft / duration);
+
+            // 随机发射烟花
+            confetti({
+              ...defaults,
+              particleCount,
+              origin: { x: randomInRange(0.1, 0.9), y: Math.random() - 0.2 }
+            });
+            confetti({
+              ...defaults,
+              particleCount,
+              origin: { x: randomInRange(0.1, 0.9), y: Math.random() - 0.2 }
+            });
+          }, 250);
+
+          // 显示成功消息
+          alert(result.message || '排班数据提交成功！');
+        } else {
+          // 显示错误消息
+          alert(result.error || '排班数据提交失败，请重试。');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('loading').style.display = 'none';
+        alert('确认失败：' + error.message);
+      }
+    };
+    // 初始化 particles.js
+    particlesJS.load('particles-js', 'https://cdn.jsdelivr.net/particles.json/2.0.0/particles.json', function () {
+      console.log('callback - particles.js config loaded');
+    });
+  </script>
+</body>
+
+</html>

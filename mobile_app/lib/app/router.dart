@@ -1,0 +1,24 @@
+import 'package:go_router/go_router.dart';
+import '../features/home/home_page.dart';
+import '../features/borrow/borrow_page.dart';
+import '../features/products/products_page.dart';
+import '../features/attendance/attendance_page.dart';
+import '../features/sales/sales_summary_page.dart';
+import '../features/revenue/revenue_page.dart';
+import '../features/weekly/weekly_schedule_page.dart';
+import '../features/schedule_ai/schedule_ai_page.dart';
+
+GoRouter createRouter() {
+  return GoRouter(
+    routes: [
+      GoRoute(path: '/', builder: (context, state) => const HomePage()),
+      GoRoute(path: '/borrow', builder: (context, state) => const BorrowPage()),
+      GoRoute(path: '/products', builder: (context, state) => const ProductsPage()),
+      GoRoute(path: '/attendance', builder: (context, state) => const AttendancePage()),
+      GoRoute(path: '/sales', builder: (context, state) => const SalesSummaryPage()),
+      GoRoute(path: '/revenue', builder: (context, state) => const RevenuePage()),
+      GoRoute(path: '/weekly', builder: (context, state) => const WeeklySchedulePage()),
+      GoRoute(path: '/schedule-ai', builder: (context, state) => const ScheduleAIPage()),
+    ],
+  );
+}

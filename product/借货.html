@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>借货统计管理系统</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body>
+  <div class="container">
+    <!-- 页面标题 -->
+    <header class="header">
+      <h1><i class="fas fa-clipboard-list"></i> 借货统计管理系统</h1>
+    </header>
+
+    <!-- 添加借货记录表单 -->
+    <div class="form-section">
+      <h2><i class="fas fa-plus-circle"></i> 添加借货记录</h2>
+      <form id="borrowForm" class="borrow-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="borrower">借货人</label>
+            <input type="text" id="borrower" name="borrower" required>
+          </div>
+          <div class="form-group">
+            <label for="borrowUnit">借货单位</label>
+            <input type="text" id="borrowUnit" name="borrowUnit" required>
+          </div>
+          <div class="form-group">
+            <label for="borrowDate">借货日期</label>
+            <input type="date" id="borrowDate" name="borrowDate" required>
+          </div>
+          <div class="form-group">
+            <label for="sourceUnit">借取源头单位</label>
+            <input type="text" id="sourceUnit" name="sourceUnit" required>
+          </div>
+          <div class="form-group">
+            <label for="sourcePerson">源头负责人</label>
+            <input type="text" id="sourcePerson" name="sourcePerson" required>
+          </div>
+          <div class="form-group">
+            <label for="notes">备注</label>
+            <input type="text" id="notes" name="notes" placeholder="选填">
+          </div>
+        </div>
+
+        <div class="items-section">
+          <h3 class="items-title"><i class="fas fa-boxes"></i> 借货商品</h3>
+          <div id="itemsContainer" class="items-container">
+            <!-- 商品行将由JS初始化 -->
+          </div>
+          <button type="button" class="btn btn-secondary" id="addItemBtn">
+            <i class="fas fa-plus"></i> 添加商品
+          </button>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save"></i> 添加记录
+        </button>
+      </form>
+    </div>
+
+    <!-- 统计信息 -->
+    <div class="stats-section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <i class="fas fa-list-ul"></i>
+          <div class="stat-info">
+            <h3 id="totalRecords">0</h3>
+            <p>总记录数</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <i class="fas fa-clock"></i>
+          <div class="stat-info">
+            <h3 id="pendingReturns">0</h3>
+            <p>待还货</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <i class="fas fa-check-circle"></i>
+          <div class="stat-info">
+            <h3 id="completedReturns">0</h3>
+            <p>已还货</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 搜索和筛选 -->
+    <div class="search-section">
+      <div class="search-controls">
+        <div class="search-group">
+          <input type="text" id="searchInput" placeholder="搜索借货人、货物名称...">
+          <i class="fas fa-search"></i>
+        </div>
+        <select id="statusFilter">
+          <option value="all">全部状态</option>
+          <option value="pending">待还货</option>
+          <option value="returned">已还货</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 借货记录列表 -->
+    <div class="records-section">
+      <h2><i class="fas fa-table"></i> 借货记录</h2>
+      <div class="table-container">
+        <table id="recordsTable">
+          <thead>
+            <tr>
+              <th>编号</th>
+              <th>借货人</th>
+              <th>商品明细</th>
+              <th>借货日期</th>
+              <th>借货单位</th>
+              <th>源头单位</th>
+              <th>源头负责人</th>
+              <th>状态</th>
+              <th>最近还货</th>
+              <th>备注</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="recordsBody">
+            <!-- 记录将通过JavaScript动态添加 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 还货确认模态框 -->
+  <div id="returnModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-undo"></i> 确认还货</h3>
+        <span class="close">&times;</span>
+      </div>
+      <div class="modal-body">
+        <p>请为每件商品填写归还数量，可部分归还。</p>
+        <div id="returnItemsContainer" class="return-items-container">
+          <!-- 还货商品行由JS生成 -->
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="returnDate">还货日期</label>
+            <input type="date" id="returnDate" name="returnDate" required>
+          </div>
+          <div class="form-group">
+            <label for="returnNotes">还货备注</label>
+            <textarea id="returnNotes" name="returnNotes" rows="3" placeholder="选填"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cancelReturn">取消</button>
+        <button type="button" class="btn btn-success" id="confirmReturn">确认还货</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>

@@ -68,6 +68,12 @@ class _HomePageState extends State<HomePage> {
         'icon': Icons.text_snippet,
         'route': '/schedule-ai',
       },
+      {
+        'title': '设置',
+        'desc': '配置外网接口地址',
+        'icon': Icons.settings,
+        'route': '/settings',
+      },
     ];
 
     return Scaffold(

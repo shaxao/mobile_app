@@ -63,6 +63,12 @@ class _HomePageState extends State<HomePage> {
         'route': '/weekly',
       },
       {
+        'title': '当日排班查询',
+        'desc': '按日期查看当天排班',
+        'icon': Icons.event,
+        'route': '/daily',
+      },
+      {
         'title': '报班识别助手',
         'desc': '粘贴报班文本识别与确认',
         'icon': Icons.text_snippet,

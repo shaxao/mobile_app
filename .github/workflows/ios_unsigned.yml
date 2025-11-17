@@ -34,8 +34,7 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R mobile_app/build/ios/iphoneos/Runner.app Payload/Runner.app
-          cd Payload
-          zip -r ../Runner.ipa .
+          zip -r Runner.ipa Payload
         shell: bash
 
       - name: Upload Artifact

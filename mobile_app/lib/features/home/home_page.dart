@@ -45,6 +45,12 @@ class _HomePageState extends State<HomePage> {
         'route': '/products',
       },
       {
+        'title': '订货管理',
+        'desc': 'Excel导入、排序与搜索',
+        'icon': Icons.shopping_cart,
+        'route': '/order',
+      },
+      {
         'title': '员工考勤',
         'desc': '按月查询个人考勤',
         'icon': Icons.badge,

@@ -40,6 +40,9 @@ dependencies:
   dio:
   shared_preferences:
   flutter_screenutil:
+  file_picker:
+  excel:
+  spreadsheet_decoder:
 
 dev_dependencies:
   flutter_test:

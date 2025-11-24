@@ -34,7 +34,7 @@ jobs:
 
       - name: Flutter pub get
         run: flutter pub get
-        working-directory: .
+        working-directory: mobile_app
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
@@ -50,11 +50,11 @@ jobs:
         run: |
           pod repo update
           pod install
-        working-directory: ios
+        working-directory: mobile_app/ios
 
       - name: Precache iOS artifacts
         run: flutter precache --ios
-        working-directory: .
+        working-directory: mobile_app
 
       # 使用 Xcode 禁签构建 Runner.app（完全绕过签名校验）
       - name: Xcode build (codesign disabled)
@@ -71,7 +71,7 @@ jobs:
             CODE_SIGN_IDENTITY= \
             DEVELOPMENT_TEAM= \
             build
-        working-directory: .
+        working-directory: mobile_app
 
       - name: Assemble unsigned IPA
         run: |
@@ -86,10 +86,10 @@ jobs:
           cd Payload
           zip -r ../Runner.ipa .
         shell: bash
-        working-directory: .
+        working-directory: mobile_app
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Runner-unsigned-ipa
-          path: Runner.ipa
+          path: mobile_app/Runner.ipa

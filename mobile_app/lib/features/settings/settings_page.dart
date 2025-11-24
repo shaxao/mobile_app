@@ -31,9 +31,10 @@ class _SettingsPageState extends State<SettingsPage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('api_base', v);
       ApiClient.setBase(v);
+      if (!mounted) return;
       TDToast.showText('已保存并应用', context: context);
     } finally {
-      setState(() => saving = false);
+      if (mounted) setState(() => saving = false);
     }
   }
 

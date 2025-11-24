@@ -6,7 +6,7 @@ on:
       api_base:
         description: API base url
         required: true
-        default: https://service.saliya.top/api/v1
+        default: http://111.229.184.169/api/v1
   push:
     branches: [ main ]
 
@@ -34,16 +34,20 @@ jobs:
           pod install
         working-directory: mobile_app/ios
 
-      - name: Build unsigned IPA
-        run: flutter build ipa --no-codesign --release --dart-define API_BASE=${{ env.API_BASE }}
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign --dart-define API_BASE=${{ env.API_BASE }}
         working-directory: mobile_app
 
-      - name: Locate IPA
-        run: ls -al build/ios/ipa
+      - name: Assemble unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          cd Payload
+          zip -r ../Runner.ipa .
         working-directory: mobile_app
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Runner-unsigned-ipa
-          path: mobile_app/build/ios/ipa/Runner.ipa
+          path: mobile_app/Runner.ipa

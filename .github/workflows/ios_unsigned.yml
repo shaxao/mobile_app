@@ -6,7 +6,7 @@ on:
       api_base:
         description: API base url
         required: true
-        default: http://111.229.184.169/api/v1
+        default: https://service.saliya.top/api/v1
   push:
     branches: [ main ]
 
@@ -23,6 +23,8 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # 如需固定版本，添加：
+          # flutter-version: '3.19.5'
 
       - name: Flutter pub get
         run: flutter pub get
@@ -34,16 +36,38 @@ jobs:
           pod install
         working-directory: mobile_app/ios
 
-      - name: Build iOS (no codesign)
+      - name: Flutter build (no codesign)
         run: flutter build ios --release --no-codesign --dart-define API_BASE=${{ env.API_BASE }}
+        working-directory: mobile_app
+
+      - name: Xcode build (codesign disabled)
+        run: |
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM= \
+            build
         working-directory: mobile_app
 
       - name: Assemble unsigned IPA
         run: |
           mkdir -p Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          # 优先使用 Flutter 构建输出，如不存在则回退到 Xcode 输出
+          if [ -d "build/ios/iphoneos/Runner.app" ]; then
+            cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          else
+            # Xcode 默认输出在 DerivedData，使用查找方式定位
+            APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -name "Build" -maxdepth 3 -print 2>/dev/null | head -n 1)
+            RUNNER_APP=$(find "$APP_PATH" -type d -path "*/Products/Release-iphoneos/Runner.app" -print 2>/dev/null | head -n 1)
+            cp -R "$RUNNER_APP" Payload/Runner.app
+          fi
           cd Payload
           zip -r ../Runner.ipa .
+        shell: bash
         working-directory: mobile_app
 
       - name: Upload Artifact

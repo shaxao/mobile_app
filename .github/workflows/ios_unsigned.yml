@@ -82,8 +82,7 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Runner.xcarchive/Products/Applications/Runner.app Payload/Runner.app
-          cd Payload
-          zip -r ../Runner.ipa .
+          zip -r Runner.ipa Payload
         shell: bash
         working-directory: mobile_app
 

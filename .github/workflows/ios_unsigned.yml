@@ -61,7 +61,21 @@ jobs:
         working-directory: mobile_app
 
       # 使用 Xcode 禁签构建 Runner.app（完全绕过签名校验）
-      # 移除额外的 xcodebuild 禁签构建，完全依赖 flutter 构建输出
+      - name: Xcode build (codesign disabled)
+        run: |
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_STYLE=Manual \
+            CODE_SIGN_IDENTITY= \
+            DEVELOPMENT_TEAM= \
+            build
+        working-directory: mobile_app
 
       - name: Assemble unsigned IPA
         run: |

@@ -51,12 +51,11 @@ jobs:
           pod install
         working-directory: mobile_app/ios
 
-      # 1) Flutter 无签名设备构建（生成 build/ios/iphoneos/Runner.app）
-      - name: Flutter build (no codesign)
-        run: flutter build ios --release --no-codesign --dart-define API_BASE=${API_BASE:-https://service.saliya.top/api/v1}
+      - name: Precache iOS artifacts
+        run: flutter precache --ios
         working-directory: mobile_app
 
-      # 2) 显式 Xcode 禁签构建，避免设备归档签名校验
+      # 使用 Xcode 禁签构建 Runner.app（完全绕过签名校验）
       - name: Xcode build (codesign disabled)
         run: |
           xcodebuild \
@@ -73,11 +72,9 @@ jobs:
             build
         working-directory: mobile_app
 
-      # 3) 手工打包未签名 IPA
       - name: Assemble unsigned IPA
         run: |
           mkdir -p Payload
-          # 优先使用 Flutter 输出；若不存在则回退到 DerivedData
           if [ -d "build/ios/iphoneos/Runner.app" ]; then
             cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
           else

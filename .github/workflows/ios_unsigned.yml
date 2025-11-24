@@ -75,20 +75,13 @@ jobs:
             CODE_SIGNING_STYLE=Manual \
             CODE_SIGN_IDENTITY= \
             DEVELOPMENT_TEAM= \
-            build
+            archive -archivePath build/Runner.xcarchive
         working-directory: mobile_app
 
       - name: Assemble unsigned IPA
         run: |
           mkdir -p Payload
-          if [ -d "build/ios/iphoneos/Runner.app" ]; then
-            cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
-          else
-            echo "Runner.app not found in build/ios/iphoneos. Searching DerivedData for Xcode build output..."
-            APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -name "Build" -maxdepth 3 -print 2>/dev/null | head -n 1)
-            RUNNER_APP=$(find "$APP_PATH" -type d -path "*/Products/Release-iphoneos/Runner.app" -print 2>/dev/null | head -n 1)
-            cp -R "$RUNNER_APP" Payload/Runner.app
-          fi
+          cp -R build/Runner.xcarchive/Products/Applications/Runner.app Payload/Runner.app
           cd Payload
           zip -r ../Runner.ipa .
         shell: bash

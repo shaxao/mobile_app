@@ -51,6 +51,12 @@ class _HomePageState extends State<HomePage> {
         'route': '/order',
       },
       {
+        'title': '台账生产',
+        'desc': '图片识别与台账生成',
+        'icon': Icons.receipt_long,
+        'route': '/ledger',
+      },
+      {
         'title': '员工考勤',
         'desc': '按月查询个人考勤',
         'icon': Icons.badge,

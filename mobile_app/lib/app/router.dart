@@ -3,6 +3,7 @@ import '../features/home/home_page.dart';
 import '../features/borrow/borrow_page.dart';
 import '../features/products/products_page.dart';
 import '../features/order/order_page.dart';
+import '../features/ledger/ledger_page.dart';
 import '../features/attendance/attendance_page.dart';
 import '../features/sales/sales_summary_page.dart';
 import '../features/revenue/revenue_page.dart';
@@ -18,6 +19,7 @@ GoRouter createRouter() {
       GoRoute(path: '/borrow', builder: (context, state) => const BorrowPage()),
       GoRoute(path: '/products', builder: (context, state) => const ProductsPage()),
       GoRoute(path: '/order', builder: (context, state) => const OrderPage()),
+      GoRoute(path: '/ledger', builder: (context, state) => const LedgerPage()),
       GoRoute(path: '/attendance', builder: (context, state) => const AttendancePage()),
       GoRoute(path: '/sales', builder: (context, state) => const SalesSummaryPage()),
       GoRoute(path: '/revenue', builder: (context, state) => const RevenuePage()),

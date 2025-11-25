@@ -11,7 +11,10 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController apiCtrl = TextEditingController();
+  final TextEditingController openaiUrlCtrl = TextEditingController();
+  final TextEditingController openaiKeyCtrl = TextEditingController();
   bool saving = false;
+  bool validating = false;
 
   @override
   void initState() {
@@ -22,6 +25,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     apiCtrl.text = prefs.getString('api_base') ?? '';
+    openaiUrlCtrl.text = prefs.getString('openai_api_url') ?? 'https://api.openai.com/v1/chat/completions';
+    openaiKeyCtrl.text = prefs.getString('openai_api_key') ?? '';
   }
 
   Future<void> _save() async {
@@ -31,10 +36,38 @@ class _SettingsPageState extends State<SettingsPage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('api_base', v);
       ApiClient.setBase(v);
+      await prefs.setString('openai_api_url', openaiUrlCtrl.text.trim());
+      await prefs.setString('openai_api_key', openaiKeyCtrl.text.trim());
       if (!mounted) return;
       TDToast.showText('已保存并应用', context: context);
     } finally {
       if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _validate() async {
+    setState(() => validating = true);
+    try {
+      final base = apiCtrl.text.trim();
+      if (base.isEmpty) {
+        TDToast.showText('API_BASE 为空', context: context);
+        return;
+      }
+      ApiClient.setBase(base);
+      final resp = await ApiClient.get<Map<String, dynamic>>('/openapi.json');
+      if (resp.statusCode == 200) {
+        TDToast.showText('API_BASE 可用', context: context);
+      } else {
+        TDToast.showText('API_BASE 不可用', context: context);
+      }
+      final u = openaiUrlCtrl.text.trim();
+      final k = openaiKeyCtrl.text.trim();
+      final ok = u.startsWith('http') && k.length > 10;
+      TDToast.showText(ok ? 'OpenAI配置格式有效' : 'OpenAI配置无效', context: context);
+    } catch (e) {
+      TDToast.showText('验证失败: $e', context: context);
+    } finally {
+      if (mounted) setState(() => validating = false);
     }
   }
 
@@ -49,7 +82,15 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(children: [
               TDInput(controller: apiCtrl, hintText: 'API_BASE，例如 https://api.saliya.top/api/v1'),
               const SizedBox(height: 8),
-              TDButton(text: saving ? '保存中' : '保存', size: TDButtonSize.small, type: TDButtonType.fill, theme: TDButtonTheme.primary, onTap: _save),
+              TDInput(controller: openaiUrlCtrl, hintText: 'OpenAI API URL'),
+              const SizedBox(height: 8),
+              TDInput(controller: openaiKeyCtrl, hintText: 'OpenAI API Key'),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: TDButton(text: saving ? '保存中' : '保存', size: TDButtonSize.small, type: TDButtonType.fill, theme: TDButtonTheme.primary, onTap: _save)),
+                const SizedBox(width: 8),
+                Expanded(child: TDButton(text: validating ? '验证中' : '验证配置', size: TDButtonSize.small, type: TDButtonType.outline, onTap: _validate)),
+              ]),
             ]),
           )
         ]),

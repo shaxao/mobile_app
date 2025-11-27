@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
@@ -24,13 +23,17 @@ class _LedgerPageState extends State<LedgerPage> {
   String? templateName;
   Uint8List? conversionBytes;
   String? conversionName;
-  final TextEditingController apiUrlCtrl = TextEditingController(text: 'https://api.openai.com/v1/chat/completions');
+  Map<String, dynamic>? serverFiles;
+  final TextEditingController apiUrlCtrl = TextEditingController(
+    text: 'https://api.openai.com/v1/chat/completions',
+  );
   final TextEditingController apiKeyCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadPrefs();
+    _loadServerFiles();
   }
 
   Future<void> _loadPrefs() async {
@@ -41,64 +44,198 @@ class _LedgerPageState extends State<LedgerPage> {
     if (k != null && k.isNotEmpty) apiKeyCtrl.text = k;
   }
 
+  Future<void> _loadServerFiles() async {
+    try {
+      final resp = await ApiClient.get<Map<String, dynamic>>('/ledger/files');
+      if (!mounted) return;
+      setState(() {
+        serverFiles = resp.data;
+      });
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Column(children: [
-          TDNavBar(title: '台账生产'),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Column(children: [
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  TDButton(text: '上传送货单图片', size: TDButtonSize.small, type: TDButtonType.outline, theme: TDButtonTheme.primary, onTap: _pickImage),
-                  TDButton(text: '识别图片', size: TDButtonSize.small, type: TDButtonType.fill, theme: TDButtonTheme.primary, onTap: _recognize),
-                  TDButton(text: '上传进货表', size: TDButtonSize.small, type: TDButtonType.outline, onTap: _pickTemplate),
-                  TDButton(text: '上传换算表(可选)', size: TDButtonSize.small, type: TDButtonType.outline, onTap: _pickConversion),
-                  TDButton(text: '生成台账', size: TDButtonSize.small, type: TDButtonType.fill, theme: TDButtonTheme.primary, onTap: _processLedgerUpload),
-                  if (downloadUrl.isNotEmpty)
-                    TDButton(text: '复制下载链接', size: TDButtonSize.small, type: TDButtonType.text, onTap: _copyDownloadUrl),
-                  SizedBox(width: double.infinity, child: Text(statusText, textAlign: TextAlign.right, style: const TextStyle(color: Colors.grey))),
-                ]),
-                const SizedBox(height: 8),
-                if (templateName != null)
-                  Align(alignment: Alignment.centerLeft, child: Text('已选进货表: $templateName', style: const TextStyle(color: Colors.grey))),
-                if (conversionName != null)
-                  Align(alignment: Alignment.centerLeft, child: Text('已选换算表: $conversionName', style: const TextStyle(color: Colors.grey))),
-                const SizedBox(height: 8),
-                Row(children: [
-                  Expanded(child: TDInput(controller: apiUrlCtrl, hintText: 'OpenAI API URL')),
-                  const SizedBox(width: 8),
-                  Expanded(child: TDInput(controller: apiKeyCtrl, hintText: 'OpenAI API Key')),
-                ]),
-                const SizedBox(height: 8),
-                if (imageBytes != null)
-                  Container(height: 200, width: double.infinity, decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300)), child: Image.memory(imageBytes!, fit: BoxFit.contain)),
-                const SizedBox(height: 8),
-                _buildItemsTable(),
-              ]),
+        child: Column(
+          children: [
+            TDNavBar(title: '台账生产'),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Column(
+                  children: [
+                    if (serverFiles != null)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(8),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F3FF),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFFBBD7FF)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Color(0xFF1A73E8)),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '检测到服务器已存在模板，将默认使用已激活的进货表与换算表',
+                                style: TextStyle(color: Color(0xFF1A73E8)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        TDButton(
+                          text: '上传送货单图片',
+                          size: TDButtonSize.small,
+                          type: TDButtonType.outline,
+                          theme: TDButtonTheme.primary,
+                          onTap: _pickImage,
+                        ),
+                        TDButton(
+                          text: '识别图片',
+                          size: TDButtonSize.small,
+                          type: TDButtonType.fill,
+                          theme: TDButtonTheme.primary,
+                          onTap: _recognize,
+                        ),
+                        TDButton(
+                          text: '上传进货表',
+                          size: TDButtonSize.small,
+                          type: TDButtonType.outline,
+                          onTap: _pickTemplate,
+                        ),
+                        TDButton(
+                          text: '上传换算表(可选)',
+                          size: TDButtonSize.small,
+                          type: TDButtonType.outline,
+                          onTap: _pickConversion,
+                        ),
+                        TDButton(
+                          text: '生成台账',
+                          size: TDButtonSize.small,
+                          type: TDButtonType.fill,
+                          theme: TDButtonTheme.primary,
+                          onTap: _processLedgerUpload,
+                        ),
+                        TDButton(
+                          text: '预览生成',
+                          size: TDButtonSize.small,
+                          type: TDButtonType.outline,
+                          onTap: _previewLedger,
+                        ),
+                        if (downloadUrl.isNotEmpty)
+                          TDButton(
+                            text: '复制下载链接',
+                            size: TDButtonSize.small,
+                            type: TDButtonType.text,
+                            onTap: _copyDownloadUrl,
+                          ),
+                        if (downloadUrl.isNotEmpty)
+                          TDButton(
+                            text: '测试下载链接',
+                            size: TDButtonSize.small,
+                            type: TDButtonType.outline,
+                            onTap: _testDownloadUrl,
+                          ),
+                        SizedBox(
+                          width: double.infinity,
+                          child: Text(
+                            statusText,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (templateName != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '已选进货表: $templateName',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    if (conversionName != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '已选换算表: $conversionName',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TDInput(
+                            controller: apiUrlCtrl,
+                            hintText: 'OpenAI API URL',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TDInput(
+                            controller: apiKeyCtrl,
+                            hintText: 'OpenAI API Key',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (imageBytes != null)
+                      Container(
+                        height: 200,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Image.memory(imageBytes!, fit: BoxFit.contain),
+                      ),
+                    const SizedBox(height: 8),
+                    _buildItemsTable(),
+                  ],
+                ),
+              ),
             ),
-          ),
-          if (loading) const LinearProgressIndicator(minHeight: 2),
-        ]),
+            if (loading) const LinearProgressIndicator(minHeight: 2),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildItemsTable() {
     if (items.isEmpty) return const SizedBox.shrink();
-    return TDCellGroup(cells: [
-      for (final it in items)
-        TDCell(
-          title: '${it['product_code'] ?? ''}  拆零:${it['piece_count'] ?? ''} 箱:${it['box_count'] ?? ''}',
-          description: '生产日期: ${it['production_date'] ?? ''}',
-        ),
-    ]);
+    return TDCellGroup(
+      cells: [
+        for (final it in items)
+          TDCell(
+            title:
+                '${it['product_code'] ?? ''}  拆零:${it['piece_count'] ?? ''} 箱:${it['box_count'] ?? ''}',
+            description: '生产日期: ${it['production_date'] ?? ''}',
+          ),
+      ],
+    );
   }
 
   Future<void> _pickImage() async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
     if (res == null || res.files.isEmpty) return;
     final f = res.files.first;
     if (f.bytes == null) return;
@@ -112,12 +249,20 @@ class _LedgerPageState extends State<LedgerPage> {
     }
     try {
       setState(() => loading = true);
-      final form = FormData.fromMap({'file': MultipartFile.fromBytes(imageBytes!, filename: 'image.jpg')});
+      final form = FormData.fromMap({
+        'file': MultipartFile.fromBytes(imageBytes!, filename: 'image.jpg'),
+      });
       form.fields.add(MapEntry('api_url', apiUrlCtrl.text.trim()));
       form.fields.add(MapEntry('api_key', apiKeyCtrl.text.trim()));
-      final resp = await ApiClient.post<Map<String, dynamic>>('/ledger/image-recognize', data: form);
+      final resp = await ApiClient.post<Map<String, dynamic>>(
+        '/ledger/image-recognize',
+        data: form,
+      );
       final arr = (resp.data?['items'] as List?) ?? [];
-      items = arr.map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v))).cast<Map<String, dynamic>>().toList();
+      items = arr
+          .map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v)))
+          .cast<Map<String, dynamic>>()
+          .toList();
       statusText = '识别到 ${items.length} 条';
       if (mounted) TDToast.showText('识别完成', context: context);
     } catch (e) {
@@ -136,22 +281,50 @@ class _LedgerPageState extends State<LedgerPage> {
       setState(() => loading = true);
       Response<Map<String, dynamic>> resp;
       if (templateBytes == null) {
-        resp = await ApiClient.post<Map<String, dynamic>>('/ledger/process', data: {'items': items});
+        resp = await ApiClient.post<Map<String, dynamic>>(
+          '/ledger/process',
+          data: {'items': items},
+        );
       } else {
         final form = FormData();
-        form.files.add(MapEntry('template', MultipartFile.fromBytes(templateBytes!, filename: templateName ?? 'template.xlsx')));
+        form.files.add(
+          MapEntry(
+            'template',
+            MultipartFile.fromBytes(
+              templateBytes!,
+              filename: templateName ?? 'template.xlsx',
+            ),
+          ),
+        );
         if (conversionBytes != null) {
-          form.files.add(MapEntry('conversion', MultipartFile.fromBytes(conversionBytes!, filename: conversionName ?? 'conversion.xlsx')));
+          form.files.add(
+            MapEntry(
+              'conversion',
+              MultipartFile.fromBytes(
+                conversionBytes!,
+                filename: conversionName ?? 'conversion.xlsx',
+              ),
+            ),
+          );
         }
         form.fields.add(MapEntry('items', jsonEncode(items)));
-        resp = await ApiClient.post<Map<String, dynamic>>('/ledger/process-upload', data: form);
+        resp = await ApiClient.post<Map<String, dynamic>>(
+          '/ledger/process-upload',
+          data: form,
+        );
       }
       final saved = resp.data?['saved'] == true;
       final path = resp.data?['path']?.toString() ?? '';
       final err = (resp.data?['errors'] as List?) ?? [];
       statusText = saved ? '已生成: $path' : '生成失败';
-      downloadUrl = saved && path.isNotEmpty ? 'http://127.0.0.1:8000/api/v1/ledger/download?path=${Uri.encodeComponent(path)}' : '';
-      if (err.isNotEmpty && mounted) TDToast.showText('部分记录存在问题 ${err.length} 条', context: context);
+      downloadUrl = saved && path.isNotEmpty
+          ? ApiClient.absoluteUrl(
+              '/ledger/download?path=${Uri.encodeComponent(path)}',
+            )
+          : '';
+      if (err.isNotEmpty && mounted) {
+        TDToast.showText('部分记录存在问题 ${err.length} 条', context: context);
+      }
     } catch (e) {
       if (mounted) TDToast.showText('生成失败: $e', context: context);
     } finally {
@@ -159,8 +332,90 @@ class _LedgerPageState extends State<LedgerPage> {
     }
   }
 
+  Future<void> _previewLedger() async {
+    if (items.isEmpty) {
+      TDToast.showText('无识别数据', context: context);
+      return;
+    }
+    try {
+      setState(() => loading = true);
+      if (templateBytes == null) {
+        final resp = await ApiClient.post<Map<String, dynamic>>(
+          '/ledger/process',
+          data: {'items': items, 'dry_run': true},
+        );
+        final meta = resp.data?['meta'] as Map?;
+        final removed = meta?['deletedRows'] ?? 0;
+        final updated = meta?['updatedRows'] ?? 0;
+        statusText = '预览：有效行$updated，移除$removed';
+      } else {
+        final form = FormData();
+        form.files.add(
+          MapEntry(
+            'template',
+            MultipartFile.fromBytes(
+              templateBytes!,
+              filename: templateName ?? 'template.xlsx',
+            ),
+          ),
+        );
+        if (conversionBytes != null) {
+          form.files.add(
+            MapEntry(
+              'conversion',
+              MultipartFile.fromBytes(
+                conversionBytes!,
+                filename: conversionName ?? 'conversion.xlsx',
+              ),
+            ),
+          );
+        }
+        form.fields.add(MapEntry('items', jsonEncode(items)));
+        form.fields.add(MapEntry('dry_run', '1'));
+        final resp = await ApiClient.post<Map<String, dynamic>>(
+          '/ledger/process-upload',
+          data: form,
+        );
+        final meta = resp.data?['meta'] as Map?;
+        final removed = meta?['deletedRows'] ?? 0;
+        final updated = meta?['updatedRows'] ?? 0;
+        statusText = '预览：有效行$updated，移除$removed';
+      }
+      if (mounted) {
+        TDToast.showText('预览完成', context: context);
+      }
+    } catch (e) {
+      if (mounted) {
+        TDToast.showText('预览失败: $e', context: context);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  Future<void> _testDownloadUrl() async {
+    if (downloadUrl.isEmpty) {
+      TDToast.showText('暂无下载链接', context: context);
+      return;
+    }
+    try {
+      await ApiClient.get<Object>(
+        downloadUrl.replaceFirst(ApiClient.absoluteUrl(''), ''),
+      );
+      TDToast.showText('下载链接有效', context: context);
+    } catch (e) {
+      TDToast.showText('链接无效: $e', context: context);
+    }
+  }
+
   Future<void> _pickTemplate() async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx','xls','csv'], withData: true);
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls', 'csv'],
+      withData: true,
+    );
     if (res == null || res.files.isEmpty) return;
     final f = res.files.first;
     if (f.bytes == null) return;
@@ -168,14 +423,18 @@ class _LedgerPageState extends State<LedgerPage> {
       templateBytes = f.bytes;
       templateName = f.name;
     });
-    TDToast.showText('已选择进货表: ${f.name}', context: context);
+    if (mounted) TDToast.showText('已选择进货表: ${f.name}', context: context);
     if (items.isNotEmpty) {
       await _processLedgerUpload();
     }
   }
 
   Future<void> _pickConversion() async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx','xls','csv'], withData: true);
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls', 'csv'],
+      withData: true,
+    );
     if (res == null || res.files.isEmpty) return;
     final f = res.files.first;
     if (f.bytes == null) return;
@@ -183,7 +442,7 @@ class _LedgerPageState extends State<LedgerPage> {
       conversionBytes = f.bytes;
       conversionName = f.name;
     });
-    TDToast.showText('已选择换算表: ${f.name}', context: context);
+    if (mounted) TDToast.showText('已选择换算表: ${f.name}', context: context);
     if (items.isNotEmpty && templateBytes != null) {
       await _processLedgerUpload();
     }
@@ -192,9 +451,9 @@ class _LedgerPageState extends State<LedgerPage> {
   Future<void> _copyDownloadUrl() async {
     try {
       await Clipboard.setData(ClipboardData(text: downloadUrl));
-      TDToast.showText('下载链接已复制', context: context);
+      if (mounted) TDToast.showText('下载链接已复制', context: context);
     } catch (e) {
-      TDToast.showText('复制失败: $e', context: context);
+      if (mounted) TDToast.showText('复制失败: $e', context: context);
     }
   }
 }

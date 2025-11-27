@@ -13,6 +13,7 @@ class ApiClient {
       _base = v;
     }
   }
+
   static void setBase(String base) {
     _base = base;
   }
@@ -24,15 +25,30 @@ class ApiClient {
     return '$b/$p';
   }
 
-  static Future<Response<T>> get<T>(String path, {Map<String, dynamic>? query}) {
+  static String absoluteUrl(String path) {
+    return _buildUrl(path);
+  }
+
+  static Future<Response<T>> get<T>(
+    String path, {
+    Map<String, dynamic>? query,
+  }) {
     return _dio.get<T>(_buildUrl(path), queryParameters: query);
   }
 
-  static Future<Response<T>> post<T>(String path, {Object? data, Map<String, dynamic>? query}) {
+  static Future<Response<T>> post<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? query,
+  }) {
     return _dio.post<T>(_buildUrl(path), data: data, queryParameters: query);
   }
 
-  static Future<Response<T>> delete<T>(String path, {Object? data, Map<String, dynamic>? query}) {
+  static Future<Response<T>> delete<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? query,
+  }) {
     return _dio.delete<T>(_buildUrl(path), data: data, queryParameters: query);
   }
 }

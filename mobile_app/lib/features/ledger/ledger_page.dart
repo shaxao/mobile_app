@@ -18,6 +18,9 @@ class _LedgerPageState extends State<LedgerPage> {
   List<Map<String, dynamic>> items = [];
   String statusText = '';
   String downloadUrl = '';
+  String? lastGeneratedPath;
+  Map<String, dynamic>? lastUploadSummary;
+  List<Map<String, dynamic>> pollLog = [];
   Uint8List? imageBytes;
   Uint8List? templateBytes;
   String? templateName;
@@ -34,6 +37,7 @@ class _LedgerPageState extends State<LedgerPage> {
     super.initState();
     _loadPrefs();
     _loadServerFiles();
+    _loadLastUploadSummary();
   }
 
   Future<void> _loadPrefs() async {
@@ -51,6 +55,19 @@ class _LedgerPageState extends State<LedgerPage> {
       setState(() {
         serverFiles = resp.data;
       });
+    } catch (_) {}
+  }
+
+  Future<void> _loadLastUploadSummary() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final s = prefs.getString('external_upload_last');
+      if (s != null && s.isNotEmpty) {
+        final m = jsonDecode(s);
+        if (m is Map && mounted) {
+          setState(() => lastUploadSummary = m.cast<String, dynamic>());
+        }
+      }
     } catch (_) {}
   }
 
@@ -157,6 +174,55 @@ class _LedgerPageState extends State<LedgerPage> {
                             style: const TextStyle(color: Colors.grey),
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        if (lastUploadSummary != null)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F5F5),
+                              border: Border.all(
+                                color: const Color(0xFFE0E0E0),
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '最近上传',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '状态: ${lastUploadSummary?['status'] ?? '-'}',
+                                ),
+                                Text(
+                                  '已处理: ${lastUploadSummary?['loaded'] ?? 0}',
+                                ),
+                                Text(
+                                  '失败: ${lastUploadSummary?['failed'] ?? 0}',
+                                ),
+                                Text('时间: ${lastUploadSummary?['time'] ?? ''}'),
+                                Text(
+                                  '文件: ${lastUploadSummary?['path'] ?? ''}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (pollLog.isNotEmpty)
+                          TDCellGroup(
+                            title: '上传日志',
+                            cells: [
+                              for (final e in pollLog)
+                                TDCell(
+                                  title: '状态: ${e['status'] ?? '-'}',
+                                  description:
+                                      '处理: ${e['loaded'] ?? 0}  失败: ${e['failed'] ?? 0}  时间: ${e['time'] ?? ''}',
+                                ),
+                            ],
+                          ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -315,6 +381,7 @@ class _LedgerPageState extends State<LedgerPage> {
       }
       final saved = resp.data?['saved'] == true;
       final path = resp.data?['path']?.toString() ?? '';
+      lastGeneratedPath = path.isNotEmpty ? path : null;
       final err = (resp.data?['errors'] as List?) ?? [];
       statusText = saved ? '已生成: $path' : '生成失败';
       downloadUrl = saved && path.isNotEmpty
@@ -325,10 +392,107 @@ class _LedgerPageState extends State<LedgerPage> {
       if (err.isNotEmpty && mounted) {
         TDToast.showText('部分记录存在问题 ${err.length} 条', context: context);
       }
+      // 异步上传到监管平台
+      if (saved && path.isNotEmpty) {
+        pollLog = [];
+        _uploadToGov(path);
+      }
     } catch (e) {
       if (mounted) TDToast.showText('生成失败: $e', context: context);
     } finally {
       if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _uploadToGov(String path) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final token = sp.getString('external_upload_token') ?? '';
+      final cookie = sp.getString('external_upload_cookie') ?? '';
+      final ua =
+          sp.getString('external_upload_ua') ??
+          'Apifox/1.0.0 (https://apifox.com)';
+      if (token.isEmpty) {
+        if (mounted) TDToast.showText('请在设置中填写上传Token', context: context);
+        return;
+      }
+      final resp = await ApiClient.post<Map<String, dynamic>>(
+        '/ledger/external-upload',
+        data: {
+          'path': path,
+          'token': token,
+          'cookie': cookie,
+          'user_agent': ua,
+        },
+      );
+      final ok = resp.data?['ok'] == true;
+      final id = resp.data?['upstream'] is Map
+          ? (resp.data?['upstream'] as Map)['content']
+          : null;
+      statusText = ok ? '已上传，任务ID: ${id ?? '-'}' : '上传失败';
+      if (!mounted) return;
+      setState(() {});
+      // 轮询状态，间隔3秒，直到 status=success
+      String? lastStatus;
+      int attempts = 0;
+      while (mounted && attempts < 20) {
+        await Future.delayed(const Duration(seconds: 3));
+        final s = await ApiClient.get<Map<String, dynamic>>(
+          '/ledger/external-upload/status',
+          query: {'token': token, 'cookie': cookie, 'user_agent': ua},
+        );
+        final status = s.data?['status']?.toString();
+        final sum = s.data?['sum'] as Map?;
+        final loaded = sum?['loaded'] ?? 0;
+        final failed = sum?['failed'] ?? 0;
+        pollLog.add({
+          'status': status,
+          'loaded': loaded,
+          'failed': failed,
+          'time': DateTime.now().toIso8601String(),
+        });
+        lastStatus = status;
+        statusText = '状态: ${status ?? '-'}，已处理$loaded，失败$failed';
+        setState(() {});
+        if (status == 'success') {
+          if (mounted)
+            TDToast.showText(
+              failed == 0 ? '上传成功：已处理$loaded，失败$failed' : '上传完成但存在失败$failed',
+              context: context,
+            );
+          final summary = {
+            'status': status,
+            'loaded': loaded,
+            'failed': failed,
+            'path': path,
+            'time': DateTime.now().toIso8601String(),
+          };
+          lastUploadSummary = summary;
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('external_upload_last', jsonEncode(summary));
+          } catch (_) {}
+          break;
+        }
+        attempts++;
+      }
+      if (mounted && (lastStatus != 'success')) {
+        TDToast.showText('上传未完成或超时', context: context);
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final summary = {
+            'status': lastStatus,
+            'loaded': (pollLog.isNotEmpty ? pollLog.last['loaded'] : 0),
+            'failed': (pollLog.isNotEmpty ? pollLog.last['failed'] : 0),
+            'path': path,
+            'time': DateTime.now().toIso8601String(),
+          };
+          lastUploadSummary = summary;
+          await prefs.setString('external_upload_last', jsonEncode(summary));
+        } catch (_) {}
+      }
+    } catch (e) {
+      if (mounted) TDToast.showText('上传失败: $e', context: context);
     }
   }
 
@@ -404,9 +568,9 @@ class _LedgerPageState extends State<LedgerPage> {
       await ApiClient.get<Object>(
         downloadUrl.replaceFirst(ApiClient.absoluteUrl(''), ''),
       );
-      TDToast.showText('下载链接有效', context: context);
+      if (mounted) TDToast.showText('下载链接有效', context: context);
     } catch (e) {
-      TDToast.showText('链接无效: $e', context: context);
+      if (mounted) TDToast.showText('链接无效: $e', context: context);
     }
   }
 

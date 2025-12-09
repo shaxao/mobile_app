@@ -30,7 +30,11 @@ jobs:
         with:
           path: |
             ~/.pub-cache
+<<<<<<< HEAD
           key: ${{ runner.os }}-pub-${{ github.run_id }}
+=======
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
 
       - name: Flutter pub get
         run: flutter pub get
@@ -39,7 +43,14 @@ jobs:
       - name: Flutter build bundle
         run: flutter build bundle --release --dart-define API_BASE=${API_BASE:-https://service.saliya.top/api/v1}
         working-directory: mobile_app
+<<<<<<< HEAD
       
+=======
+
+      - name: Flutter iOS config-only
+        run: flutter build ios --config-only --dart-define API_BASE=${API_BASE:-https://service.saliya.top/api/v1}
+        working-directory: mobile_app
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
@@ -49,7 +60,11 @@ jobs:
             mobile_app/ios/Pods
             ~/Library/Caches/CocoaPods
             ~/.cocoapods
+<<<<<<< HEAD
           key: ${{ runner.os }}-pods-${{ github.run_id }}
+=======
+          key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
 
       - name: Install CocoaPods
         run: |
@@ -75,14 +90,30 @@ jobs:
             CODE_SIGNING_STYLE=Manual \
             CODE_SIGN_IDENTITY= \
             DEVELOPMENT_TEAM= \
+<<<<<<< HEAD
             archive -archivePath build/Runner.xcarchive
+=======
+            build
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
         working-directory: mobile_app
 
       - name: Assemble unsigned IPA
         run: |
           mkdir -p Payload
+<<<<<<< HEAD
           cp -R build/Runner.xcarchive/Products/Applications/Runner.app Payload/Runner.app
           zip -r Runner.ipa Payload
+=======
+          if [ -d "build/ios/iphoneos/Runner.app" ]; then
+            cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          else
+            echo "Runner.app not found in build/ios/iphoneos. Attempting flutter build ios..."
+            flutter build ios --release --no-codesign --dart-define API_BASE=${API_BASE:-https://service.saliya.top/api/v1}
+            cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          fi
+          cd Payload
+          zip -r ../Runner.ipa .
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
         shell: bash
         working-directory: mobile_app
 
@@ -90,4 +121,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Runner-unsigned-ipa
+<<<<<<< HEAD
           path: mobile_app/Runner.ipa
+=======
+          path: mobile_app/Runner.ipa
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e

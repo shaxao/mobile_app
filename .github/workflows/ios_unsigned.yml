@@ -1,13 +1,3 @@
-<<<<<<< HEAD
-name: Build iOS Unsigned IPA
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build-ios:
-    runs-on: macos-13
-=======
 name: Build iOS unsigned IPA
 
 on:
@@ -25,7 +15,6 @@ jobs:
     runs-on: macos-latest
     env:
       API_BASE: ${{ github.event.inputs.api_base }}
->>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,32 +25,6 @@ jobs:
           channel: stable
           flutter-version: '3.38.3'
 
-<<<<<<< HEAD
-      - name: Flutter Doctor
-        working-directory: mobile_app
-        run: |
-          flutter --version
-          flutter doctor -v
-
-      - name: Install dependencies
-        working-directory: mobile_app
-        run: |
-          flutter pub get
-
-      - name: Precache iOS artifacts
-        working-directory: mobile_app
-        run: |
-          flutter precache --ios
-
-      - name: Install CocoaPods
-        working-directory: mobile_app/ios
-        run: |
-          pod repo update
-          pod install --verbose
-
-      - name: Xcode archive (codesign disabled)
-        working-directory: mobile_app
-=======
       - name: Cache pub
         uses: actions/cache@v4
         with:
@@ -100,41 +63,12 @@ jobs:
 
       # 使用 Xcode 禁签构建 Runner.app（完全绕过签名校验）
       - name: Xcode build (codesign disabled)
->>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
         run: |
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
             -sdk iphoneos \
-<<<<<<< HEAD
-            -destination generic/platform=iOS \
-            archive \
-            -archivePath build/Runner.xcarchive \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_STYLE=Manual CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM=
-
-      - name: Package IPA
-        working-directory: mobile_app
-        shell: bash
-        run: |
-          set -e
-          mkdir -p Payload
-          APP_PATH="build/Runner.xcarchive/Products/Applications/Runner.app"
-          if [ -d "$APP_PATH" ]; then
-            cp -R "$APP_PATH" Payload/Runner.app
-          else
-            echo "Runner.app not found in archive"
-            exit 1
-          fi
-          (cd Payload && zip -r ../Runner.ipa Runner.app)
-          ls -lah Runner.ipa
-
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Runner-unsigned-ipa
-          path: mobile_app/Runner.ipa
-=======
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -157,4 +91,3 @@ jobs:
         with:
           name: Runner-unsigned-ipa
           path: mobile_app/Runner.ipa
->>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e

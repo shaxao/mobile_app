@@ -90,8 +90,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Runner-unsigned-ipa
-<<<<<<< HEAD
           path: mobile_app/Runner.ipa
-=======
-          path: mobile_app/Runner.ipa
->>>>>>> 278471440fc29f079a98e33390986c04419c89fb

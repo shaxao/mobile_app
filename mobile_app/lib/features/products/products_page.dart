@@ -25,6 +25,7 @@ class _ProductsPageState extends State<ProductsPage> {
   final TextEditingController searchCtrl = TextEditingController();
   final Set<int> expanded = {};
   Timer? _debounce;
+  bool _showControls = true;
 
   Future<void> _load() async {
     setState(() => loading = true);
@@ -81,186 +82,199 @@ class _ProductsPageState extends State<ProductsPage> {
               child: Column(
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      DropdownButton<int>(
-                        value: mode,
-                        items: const [
-                          DropdownMenuItem(value: 0, child: Text('按具体日期')),
-                          DropdownMenuItem(value: 3, child: Text('按起止日期')),
-                        ],
-                        onChanged: (v) => setState(() {
-                          mode = v ?? 0;
-                        }),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           statusText,
                           style: const TextStyle(color: Colors.grey),
                         ),
                       ),
+                      TDButton(
+                        text: _showControls ? '隐藏操作' : '显示操作',
+                        size: TDButtonSize.small,
+                        type: TDButtonType.text,
+                        onTap: () => setState(() => _showControls = !_showControls),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  TDInput(
-                    controller: searchCtrl,
-                    hintText: '搜索编号或名称',
-                    onChanged: (_) => _onSearchChanged(),
-                  ),
-                  const SizedBox(height: 8),
-                  if (mode == 0)
+                  if (_showControls) ...[
+                    const SizedBox(height: 8),
                     Row(
                       children: [
-                        Expanded(
-                          child: TDInput(
-                            controller: chooseDateCtrl,
-                            hintText: '查询日期(YYYY-MM-DD)',
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        TDButton(
-                          text: '选择日期',
-                          size: TDButtonSize.small,
-                          type: TDButtonType.outline,
-                          theme: TDButtonTheme.primary,
-                          onTap: () async {
-                            final now = DateTime.now();
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: now,
-                              firstDate: DateTime(now.year - 5),
-                              lastDate: DateTime(now.year + 5),
-                            );
-                            if (picked != null) {
-                              chooseDateCtrl.text =
-                                  '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                            }
-                          },
+                        DropdownButton<int>(
+                          value: mode,
+                          items: const [
+                            DropdownMenuItem(value: 0, child: Text('按具体日期')),
+                            DropdownMenuItem(value: 3, child: Text('按起止日期')),
+                          ],
+                          onChanged: (v) => setState(() {
+                            mode = v ?? 0;
+                          }),
                         ),
                       ],
-                    )
-                  else
+                    ),
+                    const SizedBox(height: 8),
+                    TDInput(
+                      controller: searchCtrl,
+                      hintText: '搜索编号或名称',
+                      onChanged: (_) => _onSearchChanged(),
+                    ),
+                    const SizedBox(height: 8),
+                    if (mode == 0)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TDInput(
+                              controller: chooseDateCtrl,
+                              hintText: '查询日期(YYYY-MM-DD)',
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TDButton(
+                            text: '选择日期',
+                            size: TDButtonSize.small,
+                            type: TDButtonType.outline,
+                            theme: TDButtonTheme.primary,
+                            onTap: () async {
+                              final now = DateTime.now();
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: now,
+                                firstDate: DateTime(now.year - 5),
+                                lastDate: DateTime(now.year + 5),
+                              );
+                              if (picked != null) {
+                                chooseDateCtrl.text =
+                                    '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                              }
+                            },
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TDInput(
+                              controller: startDateCtrl,
+                              hintText: '起始日期(YYYY-MM-DD)',
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TDButton(
+                            text: '选择起始',
+                            size: TDButtonSize.small,
+                            type: TDButtonType.outline,
+                            theme: TDButtonTheme.primary,
+                            onTap: () async {
+                              final now = DateTime.now();
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: now,
+                                firstDate: DateTime(now.year - 5),
+                                lastDate: DateTime(now.year + 5),
+                              );
+                              if (picked != null) {
+                                startDateCtrl.text =
+                                    '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TDInput(
+                              controller: endDateCtrl,
+                              hintText: '终止日期(YYYY-MM-DD)',
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TDButton(
+                            text: '选择终止',
+                            size: TDButtonSize.small,
+                            type: TDButtonType.outline,
+                            theme: TDButtonTheme.primary,
+                            onTap: () async {
+                              final now = DateTime.now();
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: now,
+                                firstDate: DateTime(now.year - 5),
+                                lastDate: DateTime(now.year + 5),
+                              );
+                              if (picked != null) {
+                                endDateCtrl.text =
+                                    '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
-                        Expanded(
-                          child: TDInput(
-                            controller: startDateCtrl,
-                            hintText: '起始日期(YYYY-MM-DD)',
-                          ),
-                        ),
-                        const SizedBox(width: 8),
                         TDButton(
-                          text: '选择起始',
+                          text: '查询',
                           size: TDButtonSize.small,
                           type: TDButtonType.outline,
                           theme: TDButtonTheme.primary,
-                          onTap: () async {
-                            final now = DateTime.now();
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: now,
-                              firstDate: DateTime(now.year - 5),
-                              lastDate: DateTime(now.year + 5),
-                            );
-                            if (picked != null) {
-                              startDateCtrl.text =
-                                  '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TDInput(
-                            controller: endDateCtrl,
-                            hintText: '终止日期(YYYY-MM-DD)',
-                          ),
+                          onTap: _load,
                         ),
                         const SizedBox(width: 8),
                         TDButton(
-                          text: '选择终止',
+                          text: '重置',
                           size: TDButtonSize.small,
-                          type: TDButtonType.outline,
-                          theme: TDButtonTheme.primary,
-                          onTap: () async {
-                            final now = DateTime.now();
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: now,
-                              firstDate: DateTime(now.year - 5),
-                              lastDate: DateTime(now.year + 5),
-                            );
-                            if (picked != null) {
-                              endDateCtrl.text =
-                                  '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                            }
+                          type: TDButtonType.text,
+                          onTap: () {
+                            chooseDateCtrl.clear();
+                            startDateCtrl.clear();
+                            endDateCtrl.clear();
+                            filterCtrl.clear();
+                            searchCtrl.clear();
+                            items = [];
+                            viewItems = [];
+                            ingAgg = [];
+                            statusText = '';
+                            errorText = '';
+                            expanded.clear();
+                            setState(() {});
                           },
                         ),
                       ],
                     ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      TDButton(
-                        text: '查询',
-                        size: TDButtonSize.small,
-                        type: TDButtonType.outline,
-                        theme: TDButtonTheme.primary,
-                        onTap: _load,
-                      ),
-                      const SizedBox(width: 8),
-                      TDButton(
-                        text: '重置',
-                        size: TDButtonSize.small,
-                        type: TDButtonType.text,
-                        onTap: () {
-                          chooseDateCtrl.clear();
-                          startDateCtrl.clear();
-                          endDateCtrl.clear();
-                          filterCtrl.clear();
-                          searchCtrl.clear();
-                          items = [];
-                          viewItems = [];
-                          ingAgg = [];
-                          statusText = '';
-                          errorText = '';
-                          expanded.clear();
-                          setState(() {});
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: const Text('批量筛选菜名（每行一个）'),
-                  ),
-                  TDInput(
-                    controller: filterCtrl,
-                    hintText: '例：\n金枪鱼色拉\n牛肉饭\n寿司拼盘',
-                    maxLines: 4,
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      TDButton(
-                        text: '应用筛选',
-                        size: TDButtonSize.small,
-                        type: TDButtonType.outline,
-                        theme: TDButtonTheme.primary,
-                        onTap: _applyFilter,
-                      ),
-                      const SizedBox(width: 8),
-                      TDButton(
-                        text: '清空筛选',
-                        size: TDButtonSize.small,
-                        type: TDButtonType.text,
-                        onTap: () {
-                          filterCtrl.clear();
-                          _applyFilter();
-                        },
-                      ),
-                    ],
-                  ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: const Text('批量筛选菜名（每行一个）'),
+                    ),
+                    TDInput(
+                      controller: filterCtrl,
+                      hintText: '例：\n金枪鱼色拉\n牛肉饭\n寿司拼盘',
+                      maxLines: 4,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        TDButton(
+                          text: '应用筛选',
+                          size: TDButtonSize.small,
+                          type: TDButtonType.outline,
+                          theme: TDButtonTheme.primary,
+                          onTap: _applyFilter,
+                        ),
+                        const SizedBox(width: 8),
+                        TDButton(
+                          text: '清空筛选',
+                          size: TDButtonSize.small,
+                          type: TDButtonType.text,
+                          onTap: () {
+                            filterCtrl.clear();
+                            _applyFilter();
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                   if (errorText.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),

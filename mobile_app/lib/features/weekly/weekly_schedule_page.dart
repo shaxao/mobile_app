@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/services/api_client.dart';
 
 class WeeklySchedulePage extends StatefulWidget {
@@ -111,10 +112,10 @@ class _WeeklySchedulePageState extends State<WeeklySchedulePage> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _chip('本周合计'),
-                      _chip('有数据: $dataDays 天'),
-                      _chip('上班: ${totalLabor.toStringAsFixed(2)} 小时'),
-                      _chip('休息: ${totalBreak.toStringAsFixed(2)} 小时'),
+                      _chip('本周合计', bg: const Color(0xFFF1F5F9), fg: const Color(0xFF6B7280)),
+                      _chip('有数据: $dataDays 天', bg: const Color(0xFFEFF6FF), fg: const Color(0xFF2563EB)),
+                      _chip('上班: ${totalLabor.toStringAsFixed(2)} 小时', bg: const Color(0xFFECFDF5), fg: const Color(0xFF10B981)),
+                      _chip('休息: ${totalBreak.toStringAsFixed(2)} 小时', bg: const Color(0xFFFFFBEB), fg: const Color(0xFFF59E0B)),
                     ],
                   ),
                 ),
@@ -151,57 +152,50 @@ class _WeeklySchedulePageState extends State<WeeklySchedulePage> {
                                   ? ((day['breakHours'] ?? '-').toString())
                                   : '-';
                               return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.04,
-                                        ),
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  padding: const EdgeInsets.all(12),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              dateText,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                              ),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    final dt = (day['date'] ?? '').toString();
+                                    if (dt.isNotEmpty) {
+                                      context.push('/daily?date=$dt');
+                                    }
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2)),
+                                      ],
+                                    ),
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(dateText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                                             ),
-                                          ),
-                                          _chip(has ? '有数据' : '无数据'),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: [
-                                          _chip(nm),
-                                          _chip('岗位: $pos'),
-                                          _chip('上班: $shift'),
-                                          _chip('上班时长: $laborH 小时'),
-                                          _chip('休息: $brk'),
-                                          _chip('休息时长: $brkDurH 小时'),
-                                        ],
-                                      ),
-                                    ],
+                                            _chip(has ? '有数据' : '无数据', bg: has ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB), fg: has ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: [
+                                            _chip(nm, bg: const Color(0xFFF1F5F9), fg: const Color(0xFF6B7280)),
+                                            _chip('岗位: $pos', bg: const Color(0xFFEFF6FF), fg: const Color(0xFF2563EB)),
+                                            _chip('上班: $shift', bg: const Color(0xFFEFF6FF), fg: const Color(0xFF2563EB)),
+                                            _chip('上班时长: $laborH 小时', bg: const Color(0xFFECFDF5), fg: const Color(0xFF10B981)),
+                                            _chip('休息: $brk', bg: const Color(0xFFF8FAFC), fg: const Color(0xFF64748B)),
+                                            _chip('休息时长: $brkDurH 小时', bg: const Color(0xFFFFFBEB), fg: const Color(0xFFF59E0B)),
+                                          ],
+                                        )
+                                      ],
+                                    ),
                                   ),
                                 ),
                               );
@@ -216,17 +210,11 @@ class _WeeklySchedulePageState extends State<WeeklySchedulePage> {
     );
   }
 
-  Widget _chip(String text) {
+  Widget _chip(String text, {Color bg = const Color(0xFFF5F6FA), Color fg = const Color(0xFF6B7280)}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F6FA),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(text, style: TextStyle(color: fg, fontSize: 12)),
     );
   }
 

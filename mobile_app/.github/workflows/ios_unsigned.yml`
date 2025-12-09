@@ -1,0 +1,128 @@
+name: Build iOS unsigned IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: API base url
+        required: true
+        default: https://service.saliya.top/api/v1
+  push:
+    branches: [ main ]
+
+jobs:
+  build-ipa:
+    runs-on: macos-latest
+    env:
+      API_BASE: ${{ github.event.inputs.api_base }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.3'
+
+      - name: Cache pub
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+<<<<<<< HEAD
+          key: ${{ runner.os }}-pub-${{ github.run_id }}
+=======
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
+
+      - name: Flutter pub get
+        run: flutter pub get
+        working-directory: mobile_app
+
+      - name: Flutter build bundle
+        run: flutter build bundle --release --dart-define API_BASE=${API_BASE:-https://service.saliya.top/api/v1}
+        working-directory: mobile_app
+<<<<<<< HEAD
+      
+=======
+
+      - name: Flutter iOS config-only
+        run: flutter build ios --config-only --dart-define API_BASE=${API_BASE:-https://service.saliya.top/api/v1}
+        working-directory: mobile_app
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Pods
+            mobile_app/ios/Pods
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods
+<<<<<<< HEAD
+          key: ${{ runner.os }}-pods-${{ github.run_id }}
+=======
+          key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
+
+      - name: Install CocoaPods
+        run: |
+          pod repo update
+          pod install
+        working-directory: mobile_app/ios
+
+      - name: Precache iOS artifacts
+        run: flutter precache --ios
+        working-directory: mobile_app
+
+      # 使用 Xcode 禁签构建 Runner.app（完全绕过签名校验）
+      - name: Xcode build (codesign disabled)
+        run: |
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_STYLE=Manual \
+            CODE_SIGN_IDENTITY= \
+            DEVELOPMENT_TEAM= \
+<<<<<<< HEAD
+            archive -archivePath build/Runner.xcarchive
+=======
+            build
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
+        working-directory: mobile_app
+
+      - name: Assemble unsigned IPA
+        run: |
+          mkdir -p Payload
+<<<<<<< HEAD
+          cp -R build/Runner.xcarchive/Products/Applications/Runner.app Payload/Runner.app
+          zip -r Runner.ipa Payload
+=======
+          if [ -d "build/ios/iphoneos/Runner.app" ]; then
+            cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          else
+            echo "Runner.app not found in build/ios/iphoneos. Attempting flutter build ios..."
+            flutter build ios --release --no-codesign --dart-define API_BASE=${API_BASE:-https://service.saliya.top/api/v1}
+            cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          fi
+          cd Payload
+          zip -r ../Runner.ipa .
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e
+        shell: bash
+        working-directory: mobile_app
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Runner-unsigned-ipa
+<<<<<<< HEAD
+          path: mobile_app/Runner.ipa
+=======
+          path: mobile_app/Runner.ipa
+>>>>>>> 3b05955448111a19268705f7739ef747b77bcc6e

@@ -62,7 +62,7 @@ def login(timeout=10):
     try:
         # 登录获取数据
         url = "https://www1.tastyqube.com.cn/TastyQube_SALIYA/LoginAction.do?fromAppId=H-01-01&companyCd=QPRUVM"
-        payload = 'loginId=1S00059&password=S1000059&companyCd=QPRUVM&companyCd=QPRUVM&borwser=Browser%3A%20Google%20Chrome%2098.0.4758.102%20%20Ver%3A%5BMozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML&borwser=null&borwserLng=zh-CN&borwserLng=null&context_path=%2FTastyQube_SALIYA&url_suffix=.do&list_start_index=&focus_name=&actionId=&conditionDisabled=true&hozona=&shopChangeFlg=false&entryItemEditState=true&searchConditionEditState=false&validtionError=false&screenAppId=H-01-01&screenId=H-01-01&screenName=LOGIN%E7%94%BB%E9%9D%A2'
+        payload = 'loginId=1S00059&password=saliya599&companyCd=QPRUVM&companyCd=QPRUVM&borwser=Browser%3A%20Google%20Chrome%2098.0.4758.102%20%20Ver%3A%5BMozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML&borwser=null&borwserLng=zh-CN&borwserLng=null&context_path=%2FTastyQube_SALIYA&url_suffix=.do&list_start_index=&focus_name=&actionId=&conditionDisabled=true&hozona=&shopChangeFlg=false&entryItemEditState=true&searchConditionEditState=false&validtionError=false&screenAppId=H-01-01&screenId=H-01-01&screenName=LOGIN%E7%94%BB%E9%9D%A2'
         headers = {
             'Accept': '*/*',
             'Host': 'www1.tastyqube.com.cn',

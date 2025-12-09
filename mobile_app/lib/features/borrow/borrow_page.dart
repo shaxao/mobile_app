@@ -23,7 +23,11 @@ class _BorrowPageState extends State<BorrowPage> {
   Future<void> _load() async {
     setState(() => loading = true);
     try {
-      final resp = await ApiClient.get<List<dynamic>>('/borrow/records', query: {'date': date.isEmpty ? null : date});
+      Map<String, dynamic>? q;
+      if (date.isNotEmpty) {
+        q = {'date': date};
+      }
+      final resp = await ApiClient.get<List<dynamic>>('/borrow/records', query: q);
       setState(() => records = resp.data ?? []);
     } finally {
       setState(() => loading = false);
@@ -352,31 +356,37 @@ class _BorrowPageState extends State<BorrowPage> {
                       });
                     },
                   );
-                  if (ok == true) {
-                    final itemsPayload = <Map<String, dynamic>>[];
-                    for (final c in itemsCtrls) {
-                      final name = c['name']!.text;
-                      final qty = int.tryParse(c['qty']!.text) ?? 0;
-                      if (name.isEmpty || qty <= 0) continue;
-                      itemsPayload.add({
-                        'name': name,
-                        'spec': c['spec']!.text,
-                        'quantity': qty,
-                        'returnedQuantity': 0,
-                      });
-                    }
-                    await ApiClient.post('/borrow/records', data: {
-                      'borrower': borrowerCtrl.text,
-                      'borrowDate': borrowDateCtrl.text,
-                      'borrowUnit': borrowUnitCtrl.text,
-                      'sourceUnit': sourceUnitCtrl.text,
-                      'sourcePerson': sourcePersonCtrl.text,
-                      'items': itemsPayload,
-                    });
-                    if (!context.mounted) return;
-                    TDToast.showText('新增借货记录成功(${itemsPayload.length} 项商品)', context: context);
-                    await _load();
-                  }
+          if (ok == true) {
+            final itemsPayload = <Map<String, dynamic>>[];
+            for (final c in itemsCtrls) {
+              final name = c['name']!.text;
+              final qty = int.tryParse(c['qty']!.text) ?? 0;
+              if (name.isEmpty || qty <= 0) continue;
+              itemsPayload.add({
+                'name': name,
+                'spec': c['spec']!.text,
+                'quantity': qty,
+                'returnedQuantity': 0,
+              });
+            }
+            final resp = await ApiClient.post<Map<String, dynamic>>('/borrow/records', data: {
+              'borrower': borrowerCtrl.text,
+              'borrowDate': borrowDateCtrl.text,
+              'borrowUnit': borrowUnitCtrl.text,
+              'sourceUnit': sourceUnitCtrl.text,
+              'sourcePerson': sourcePersonCtrl.text,
+              'items': itemsPayload,
+            });
+            final created = resp.data;
+            if (created != null) {
+              setState(() {
+                records = [created, ...records];
+              });
+            }
+            if (!context.mounted) return;
+            TDToast.showText('新增借货记录成功(${itemsPayload.length} 项商品)', context: context);
+            await _load();
+          }
                 },
               ),
             ),

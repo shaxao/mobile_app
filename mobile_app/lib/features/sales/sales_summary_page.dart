@@ -62,10 +62,10 @@ class _SalesSummaryPageState extends State<SalesSummaryPage> {
                 decoration: BoxDecoration(color: const Color(0xFFF7F8FA), borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Wrap(spacing: 8, runSpacing: 8, children: [
-                  _chip('本周总计'),
-                  _chip('早: ${_fmt(totalMorning)}'),
-                  _chip('晚: ${_fmt(totalEvening)}'),
-                  _chip('总计: ${_fmt(totalWeek)}'),
+                  _chip('本周总计', bg: const Color(0xFFF1F5F9), fg: const Color(0xFF6B7280)),
+                  _chip('早: ${_fmt(totalMorning)}', bg: const Color(0xFFEFF6FF), fg: const Color(0xFF2563EB)),
+                  _chip('晚: ${_fmt(totalEvening)}', bg: const Color(0xFFFFFBEB), fg: const Color(0xFFF59E0B)),
+                  _chip('总计: ${_fmt(totalWeek)}', bg: const Color(0xFFF8FAFC), fg: const Color(0xFF334155)),
                 ]),
               ),
             ),
@@ -91,9 +91,9 @@ class _SalesSummaryPageState extends State<SalesSummaryPage> {
                               Text(dateText, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                               const SizedBox(height: 8),
                               Wrap(spacing: 8, runSpacing: 8, children: [
-                                _chip('早: ${_fmt(morning)}'),
-                                _chip('晚: ${_fmt(evening)}'),
-                                _chip('合计: ${_fmt(total)}'),
+                                _chip('早: ${_fmt(morning)}', bg: const Color(0xFFEFF6FF), fg: const Color(0xFF2563EB)),
+                                _chip('晚: ${_fmt(evening)}', bg: const Color(0xFFFFFBEB), fg: const Color(0xFFF59E0B)),
+                                _chip('合计: ${_fmt(total)}', bg: const Color(0xFFF8FAFC), fg: const Color(0xFF334155)),
                               ]),
                               const SizedBox(height: 8),
                               _bar(mm, em),
@@ -108,11 +108,11 @@ class _SalesSummaryPageState extends State<SalesSummaryPage> {
     );
   }
 
-  Widget _chip(String text) {
+  Widget _chip(String text, {Color bg = const Color(0xFFF5F6FA), Color fg = const Color(0xFF6B7280)}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: const Color(0xFFF5F6FA), borderRadius: BorderRadius.circular(999)),
-      child: Text(text, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(text, style: TextStyle(color: fg, fontSize: 12)),
     );
   }
 

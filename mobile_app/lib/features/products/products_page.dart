@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
+// 产品分析页不包含订货相关上传与排序功能
 import '../../core/services/api_client.dart';
 
 class ProductsPage extends StatefulWidget {
@@ -20,7 +22,9 @@ class _ProductsPageState extends State<ProductsPage> {
   final TextEditingController startDateCtrl = TextEditingController();
   final TextEditingController endDateCtrl = TextEditingController();
   final TextEditingController filterCtrl = TextEditingController();
+  final TextEditingController searchCtrl = TextEditingController();
   final Set<int> expanded = {};
+  Timer? _debounce;
 
   Future<void> _load() async {
     setState(() => loading = true);
@@ -62,6 +66,7 @@ class _ProductsPageState extends State<ProductsPage> {
   void initState() {
     super.initState();
     // 初始无需加载，等待用户选择日期
+    searchCtrl.addListener(_onSearchChanged);
   }
 
   @override
@@ -95,6 +100,12 @@ class _ProductsPageState extends State<ProductsPage> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  TDInput(
+                    controller: searchCtrl,
+                    hintText: '搜索编号或名称',
+                    onChanged: (_) => _onSearchChanged(),
                   ),
                   const SizedBox(height: 8),
                   if (mode == 0)
@@ -206,6 +217,7 @@ class _ProductsPageState extends State<ProductsPage> {
                           startDateCtrl.clear();
                           endDateCtrl.clear();
                           filterCtrl.clear();
+                          searchCtrl.clear();
                           items = [];
                           viewItems = [];
                           ingAgg = [];
@@ -473,5 +485,38 @@ class _ProductsPageState extends State<ProductsPage> {
         ((viewItems[idx] as Map<String, dynamic>)['recipe'] ?? {}) as Map;
     final lines = (recipe['lines'] ?? []) as List;
     return lines.map((e) => e.toString()).toList();
+  }
+
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      final q = searchCtrl.text.trim();
+      if (q.isEmpty) {
+        viewItems = List<dynamic>.from(items);
+      } else {
+        final s = q.toLowerCase();
+        viewItems = items.where((p) {
+          final m = p as Map<String, dynamic>;
+          final id = (m['product_id'] ?? '').toString().toLowerCase();
+          final nm = (m['product_name'] ?? '').toString().toLowerCase();
+          return id.contains(s) || nm.contains(s);
+        }).toList();
+      }
+      statusText = '共 ${viewItems.length} 条记录';
+      expanded.clear();
+      _computeIngredients();
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    chooseDateCtrl.dispose();
+    startDateCtrl.dispose();
+    endDateCtrl.dispose();
+    filterCtrl.dispose();
+    searchCtrl.dispose();
+    super.dispose();
   }
 }

@@ -1131,6 +1131,7 @@
       let t; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), delay); };
     }
     const debouncedSave = debounce(saveCurrentHTML, 300);
+    const debouncedSaveUI = debounce(saveUIState, 150);
 
     function attachDelegationOnce() {
       if (__delegationBound) return; __delegationBound = true;
@@ -1281,8 +1282,54 @@
         wrap.classList.toggle('has-right', hasRight);
       }
       wrap.addEventListener('scroll', updateEdges, { passive: true });
+      // 保存滚动位置
+      wrap.addEventListener('scroll', () => { debouncedSaveUI(); }, { passive: true });
       window.addEventListener('resize', () => requestAnimationFrame(updateEdges));
       requestAnimationFrame(updateEdges);
+    }
+
+    // ===== UI 状态持久化 =====
+    const LS_KEY_UI = 'ORDER_UI_STATE';
+    async function saveUIState() {
+      if (!currentUser) return;
+      const wrap = document.querySelector('#result .table-container');
+      const ui = {
+        scrollLeft: wrap ? wrap.scrollLeft : 0,
+        scrollTop: wrap ? wrap.scrollTop : 0,
+        isSorted,
+        // 可扩展：分页、筛选条件、当前位置（活动行）等
+        activeRowId: (() => {
+          const active = document.querySelector('#result tr.active-row');
+          return active ? active.querySelector('input[data-role="qty"]')?.dataset.row || null : null;
+        })()
+      };
+      await saveUserData(LS_KEY_UI, ui);
+      console.log('保存UI状态:', ui);
+    }
+
+    async function loadUIState() {
+      if (!currentUser) return null;
+      const ui = await loadUserData(LS_KEY_UI);
+      console.log('加载UI状态:', ui);
+      return ui || null;
+    }
+
+    async function restoreScrollPosition() {
+      const ui = await loadUIState();
+      if (!ui) return;
+      const wrap = document.querySelector('#result .table-container');
+      if (wrap) {
+        wrap.scrollLeft = Math.max(0, ui.scrollLeft || 0);
+        wrap.scrollTop = Math.max(0, ui.scrollTop || 0);
+      }
+      // 恢复活动行高亮
+      if (ui.activeRowId) {
+        const inp = document.querySelector(`input[data-role="qty"][data-row="${ui.activeRowId}"]`);
+        const tr = inp?.closest('tr');
+        if (tr) tr.classList.add('active-row');
+      }
+      // 确保排序按钮文案与状态一致
+      updateSortButtonText();
     }
 
     function tryRestoreFromLocal() {
@@ -1321,6 +1368,8 @@
         isSorted,
         confirmationStatus: Array.from(confirmationStatus.entries()) // Map转数组保存
       });
+      // 同步保存UI状态
+      saveUIState();
       console.log('表格数据已保存到localStorage');
     }
 
@@ -1383,6 +1432,8 @@
         await saveUserData(LS_KEY_HTML, resultDiv.innerHTML);
         // 保存表格数据（包含更新后的数据）
         saveTableData();
+        // 保存UI状态
+        await saveUIState();
         // 同时保存为历史记录
         await saveHistoryRecord(resultDiv.innerHTML);
 
@@ -1393,6 +1444,8 @@
           setTimeout(() => {
             applyInputValues(currentInputValues);
           }, 100);
+          // 恢复滚动位置
+          restoreScrollPosition();
         }
 
         // 保存成功状态
@@ -1630,6 +1683,8 @@
       enableCopyControls();
       attachDelegationOnce();
       initScrollEdges();
+      // 恢复滚动位置
+      restoreScrollPosition();
 
       console.log('表格重新渲染完成，数据行数:', currentDisplayData.length);
     }
@@ -2027,6 +2082,8 @@
       enableCopyControls();
       attachDelegationOnce();
       initScrollEdges();
+      // 恢复滚动与状态
+      restoreScrollPosition();
 
       // 恢复输入值
       applyInputValues(inputValues);

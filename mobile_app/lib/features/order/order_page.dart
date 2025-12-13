@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as ex;
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart' as sd;
 import 'package:dio/dio.dart' show FormData, MultipartFile;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/services/api_client.dart';
 
 class OrderPage extends StatefulWidget {
@@ -35,6 +38,10 @@ class _OrderPageState extends State<OrderPage> {
   final Map<int, FocusNode> _focusNodes = {};
   final Set<int> detailExpanded = {};
   bool _showControls = true;
+  final ScrollController _scrollCtrl = ScrollController();
+  Timer? _uiDebounce;
+  bool _inSearch = false;
+  double _lastScrollOffsetBeforeSearch = 0.0;
 
   @override
   void initState() {
@@ -42,6 +49,11 @@ class _OrderPageState extends State<OrderPage> {
     _loadSortOrder();
     _loadSavedItems();
     searchCtrl.addListener(_onSearchChanged);
+    _scrollCtrl.addListener(() {
+      _uiDebounce?.cancel();
+      _uiDebounce = Timer(const Duration(milliseconds: 150), _saveUIState);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _restoreUIState());
   }
 
   @override
@@ -134,6 +146,7 @@ class _OrderPageState extends State<OrderPage> {
                                 setState(() {});
                                 TDToast.showText('已恢复原序', context: context);
                               }
+                              _saveUIState();
                             },
                           ),
                           TDButton(
@@ -305,6 +318,7 @@ class _OrderPageState extends State<OrderPage> {
               child: loading
                   ? const Center(child: CircularProgressIndicator())
                   : ListView(
+                      controller: _scrollCtrl,
                       children: [
                         for (int i = 0; i < viewItems.length; i++)
                           _buildOrderRow(i),
@@ -322,21 +336,49 @@ class _OrderPageState extends State<OrderPage> {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
       final q = searchCtrl.text.trim().toLowerCase();
-      if (q.isEmpty) {
-        viewItems = List<Map<String, dynamic>>.from(items);
-      } else {
-        viewItems = items.where((m) {
-          final id = (m['product_id'] ?? m['id'] ?? '')
-              .toString()
-              .toLowerCase();
-          final nm = (m['product_name'] ?? m['name'] ?? '')
-              .toString()
-              .toLowerCase();
-          return id.contains(q) || nm.contains(q);
-        }).toList();
+      if (!_inSearch && q.isNotEmpty) {
+        _lastScrollOffsetBeforeSearch = _scrollCtrl.hasClients
+            ? _scrollCtrl.offset
+            : 0.0;
+        _inSearch = true;
       }
+      List<Map<String, dynamic>> base;
+      if (q.isEmpty) {
+        base = List<Map<String, dynamic>>.from(items);
+      } else {
+        base = items
+            .where((m) {
+              final id = (m['product_id'] ?? m['id'] ?? '')
+                  .toString()
+                  .toLowerCase();
+              final nm = (m['product_name'] ?? m['name'] ?? '')
+                  .toString()
+                  .toLowerCase();
+              return id.contains(q) || nm.contains(q);
+            })
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+      viewItems = isSorted ? _applySortOrderOn(base) : base;
       statusText = '共 ${viewItems.length} 条记录';
       setState(() {});
+      _saveUIState();
+
+      // 如果退出搜索，恢复到搜索前滚动位置
+      if (q.isEmpty) {
+        _inSearch = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollCtrl.hasClients) {
+            final max = _scrollCtrl.position.maxScrollExtent;
+            final dest = math.min(
+              math.max(0.0, _lastScrollOffsetBeforeSearch),
+              max,
+            );
+            _scrollCtrl.jumpTo(dest);
+            _saveUIState();
+          }
+        });
+      }
     });
   }
 
@@ -360,9 +402,14 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   void _applySortOrder() {
+    viewItems = _applySortOrderOn(viewItems);
+    statusText = '共 ${viewItems.length} 条记录';
+  }
+
+  List<Map<String, dynamic>> _applySortOrderOn(List<Map<String, dynamic>> src) {
     final enriched = <Map<String, dynamic>>[];
-    for (int i = 0; i < viewItems.length; i++) {
-      final m = viewItems[i];
+    for (int i = 0; i < src.length; i++) {
+      final m = src[i];
       final idx = _paixuIndex(
         (m['product_name'] ?? m['name'] ?? '').toString(),
       );
@@ -374,10 +421,7 @@ class _OrderPageState extends State<OrderPage> {
       if (ai != bi) return ai.compareTo(bi);
       return (a['orig'] as int).compareTo(b['orig'] as int);
     });
-    viewItems = enriched
-        .map((e) => (e['item'] as Map<String, dynamic>))
-        .toList();
-    statusText = '共 ${viewItems.length} 条记录';
+    return enriched.map((e) => (e['item'] as Map<String, dynamic>)).toList();
   }
 
   Future<void> _uploadSortFile() async {
@@ -646,6 +690,7 @@ class _OrderPageState extends State<OrderPage> {
                             detailExpanded.add(rid);
                           }
                         });
+                        _saveUIState();
                       },
                       child: Text(detailExpanded.contains(rid) ? '收起' : '查看更多'),
                     ),
@@ -762,6 +807,18 @@ class _OrderPageState extends State<OrderPage> {
                           : s;
                       m['initBox'] = boxVal;
                       setState(() {});
+                      final key = (m['product_id'] ?? m['rid']).toString();
+                      for (int i = 0; i < items.length; i++) {
+                        final it = items[i];
+                        final k = (it['product_id'] ?? it['rid']).toString();
+                        if (k == key) {
+                          it['qtyVal'] = m['qtyVal'];
+                          it['initBox'] = m['initBox'];
+                          break;
+                        }
+                      }
+                      _saveLocalItems();
+                      _saveUIState();
                     },
                   ),
                 ),
@@ -901,6 +958,7 @@ class _OrderPageState extends State<OrderPage> {
         '/order/items',
         data: {'items': payloadItems},
       );
+      await _saveLocalItems();
       final today = DateTime.now();
       final key =
           'history_${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
@@ -928,6 +986,7 @@ class _OrderPageState extends State<OrderPage> {
   Future<void> _loadSavedItems() async {
     try {
       setState(() => loading = true);
+      await _restoreLocalItems();
       final resp = await ApiClient.get<Map<String, dynamic>>('/order/items');
       final arr = (resp.data?['items'] as List?) ?? [];
       items = arr
@@ -1045,6 +1104,83 @@ class _OrderPageState extends State<OrderPage> {
       out.add(m);
     }
     return out;
+  }
+
+  Future<void> _saveLocalItems() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = {'items': items, 'viewItems': viewItems};
+    prefs.setString('ORDER_ITEMS_LOCAL_JSON', jsonEncode(data));
+  }
+
+  Future<void> _restoreLocalItems() async {
+    final prefs = await SharedPreferences.getInstance();
+    final s = prefs.getString('ORDER_ITEMS_LOCAL_JSON') ?? '';
+    if (s.isEmpty) return;
+    final m = _decodeJson(s);
+    final li = (m['items'] as List?)?.cast<Map>() ?? [];
+    final lv = (m['viewItems'] as List?)?.cast<Map>() ?? [];
+    if (li.isNotEmpty)
+      items = li.map((e) => e.cast<String, dynamic>()).toList();
+    if (lv.isNotEmpty)
+      viewItems = lv.map((e) => e.cast<String, dynamic>()).toList();
+  }
+
+  String _encodeJson(Object o) => jsonEncode(o);
+
+  Map<String, dynamic> _decodeJson(String s) {
+    try {
+      return (s.isEmpty) ? {} : (jsonDecode(s) as Map<String, dynamic>);
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> _saveUIState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ui = {
+      'search': searchCtrl.text,
+      'isSorted': isSorted,
+      'dateMode': dateMode,
+      'chooseDate': chooseDateCtrl.text,
+      'startDate': startDateCtrl.text,
+      'endDate': endDateCtrl.text,
+      'detailExpanded': detailExpanded.toList(),
+      'scrollOffset': _scrollCtrl.hasClients ? _scrollCtrl.offset : 0.0,
+      'showControls': _showControls,
+    };
+    prefs.setString('ORDER_UI_STATE', _encodeJson(ui));
+  }
+
+  Future<void> _restoreUIState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final s = prefs.getString('ORDER_UI_STATE') ?? '';
+    if (s.isEmpty) return;
+    final ui = _decodeJson(s);
+    searchCtrl.text = (ui['search'] ?? '').toString();
+    isSorted = ui['isSorted'] == true;
+    dateMode = int.tryParse((ui['dateMode'] ?? '0').toString()) ?? 0;
+    chooseDateCtrl.text = (ui['chooseDate'] ?? '').toString();
+    startDateCtrl.text = (ui['startDate'] ?? '').toString();
+    endDateCtrl.text = (ui['endDate'] ?? '').toString();
+    final exp =
+        (ui['detailExpanded'] as List?)
+            ?.map((e) => int.tryParse(e.toString()) ?? -1)
+            .where((e) => e >= 0)
+            .toSet() ??
+        {};
+    detailExpanded
+      ..clear()
+      ..addAll(exp);
+    _showControls = ui['showControls'] == true;
+    final off = double.tryParse((ui['scrollOffset'] ?? '0').toString()) ?? 0.0;
+    if (_scrollCtrl.hasClients) {
+      _scrollCtrl.jumpTo(off);
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollCtrl.hasClients) _scrollCtrl.jumpTo(off);
+      });
+    }
+    setState(() {});
   }
 
   int _safeInt(dynamic v, {int fallback = 0}) {

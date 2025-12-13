@@ -11,12 +11,16 @@ import time
 import threading
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import getBanBiao as gb
+from menu_system.api import bp as menu_bp
+from menu_system.services import init_db as menu_init_db
 from datetime import datetime, timedelta
 import sqlite3
 from typing import List, Dict, Any
 
 app = Flask(__name__)
 CORS(app)
+menu_init_db()
+app.register_blueprint(menu_bp)
 
 @app.get('/api/v1/borrow/stats')
 def borrow_stats():

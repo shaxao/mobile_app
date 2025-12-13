@@ -93,6 +93,12 @@ class _HomePageState extends State<HomePage> {
         'icon': Icons.settings,
         'route': '/settings',
       },
+      {
+        'title': '菜单管理',
+        'desc': '菜谱Markdown导入与层级查看',
+        'icon': Icons.restaurant_menu,
+        'route': '/menu',
+      },
     ];
 
     return Scaffold(

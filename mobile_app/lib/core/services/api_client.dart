@@ -19,14 +19,27 @@ class ApiClient {
   }
 
   static String _buildUrl(String path) {
+    final p0 = (path).trim();
+    if (p0.startsWith('http://') || p0.startsWith('https://')) {
+      return p0;
+    }
     final base = (_base).trim();
     final b = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-    final p = path.startsWith('/') ? path.substring(1) : path;
+    final p = p0.startsWith('/') ? p0.substring(1) : p0;
     return '$b/$p';
   }
 
   static String absoluteUrl(String path) {
     return _buildUrl(path);
+  }
+
+  static String serverRoot() {
+    final base = (_base).trim();
+    final idx = base.indexOf('/api/v1');
+    if (idx != -1) {
+      return base.substring(0, idx);
+    }
+    return base;
   }
 
   static Future<Response<T>> get<T>(
@@ -42,6 +55,14 @@ class ApiClient {
     Map<String, dynamic>? query,
   }) {
     return _dio.post<T>(_buildUrl(path), data: data, queryParameters: query);
+  }
+
+  static Future<Response<T>> put<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? query,
+  }) {
+    return _dio.put<T>(_buildUrl(path), data: data, queryParameters: query);
   }
 
   static Future<Response<T>> delete<T>(

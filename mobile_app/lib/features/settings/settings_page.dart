@@ -78,6 +78,7 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       ApiClient.setBase(base);
       final resp = await ApiClient.get<Map<String, dynamic>>('/openapi.json');
+      if (!mounted) return;
       if (resp.statusCode == 200) {
         TDToast.showText('API_BASE 可用', context: context);
       } else {
@@ -86,8 +87,10 @@ class _SettingsPageState extends State<SettingsPage> {
       final u = openaiUrlCtrl.text.trim();
       final k = openaiKeyCtrl.text.trim();
       final ok = u.startsWith('http') && k.length > 10;
+      if (!mounted) return;
       TDToast.showText(ok ? 'OpenAI配置格式有效' : 'OpenAI配置无效', context: context);
     } catch (e) {
+      if (!mounted) return;
       TDToast.showText('验证失败: $e', context: context);
     } finally {
       if (mounted) setState(() => validating = false);

@@ -26,6 +26,11 @@ class _ProductsPageState extends State<ProductsPage> {
   final Set<int> expanded = {};
   Timer? _debounce;
   bool _showControls = true;
+  bool onlyIngredients = false;
+  final TextEditingController ingSearchCtrl = TextEditingController();
+  Timer? _ingDebounce;
+  List<Map<String, dynamic>> ingAggView = [];
+  double salesTotal = 0.0;
 
   Future<void> _load() async {
     setState(() => loading = true);
@@ -44,13 +49,38 @@ class _ProductsPageState extends State<ProductsPage> {
         payload['custom_end_date'] = endDateCtrl.text.replaceAll('-', '');
       }
       errorText = '';
-      final resp = await ApiClient.post<Map<String, dynamic>>(
-        '/products',
-        data: payload,
-      );
-      items = (resp.data?['data'] as List?) ?? [];
+      final resp = await ApiClient.post<Object>('/products', data: payload);
+      final raw = resp.data;
+      List<dynamic> parsed = [];
+      if (raw is List) {
+        parsed = raw;
+      } else if (raw is Map) {
+        final dataField = raw['data'];
+        if (dataField is List) {
+          parsed = dataField;
+        } else if (dataField is Map) {
+          parsed = (dataField['items'] as List?) ?? [];
+        } else if (raw['items'] is List) {
+          parsed = (raw['items'] as List);
+        }
+      }
+      items = parsed;
       viewItems = List<dynamic>.from(items);
       statusText = '共 ${viewItems.length} 条记录';
+      final Map<String, dynamic> map = raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : <String, dynamic>{};
+      String tp = (map['total_price_num'] ?? '').toString();
+      if (tp.isEmpty && map['data'] is Map) {
+        final inner = Map<String, dynamic>.from(map['data'] as Map);
+        tp = (inner['total_price_num'] ?? '').toString();
+      }
+      final tpVal = double.tryParse(tp) ?? 0.0;
+      if (tpVal > 0) {
+        salesTotal = tpVal;
+      } else {
+        _computeSalesTotal();
+      }
       _computeIngredients();
     } catch (e) {
       errorText = e.toString();
@@ -58,6 +88,7 @@ class _ProductsPageState extends State<ProductsPage> {
       viewItems = [];
       ingAgg = [];
       statusText = '';
+      salesTotal = 0.0;
     } finally {
       setState(() => loading = false);
     }
@@ -90,11 +121,25 @@ class _ProductsPageState extends State<ProductsPage> {
                           style: const TextStyle(color: Colors.grey),
                         ),
                       ),
+                      Text(
+                        '销售总额: ¥${_fmtCurrency(salesTotal)}',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(width: 8),
                       TDButton(
                         text: _showControls ? '隐藏操作' : '显示操作',
                         size: TDButtonSize.small,
                         type: TDButtonType.text,
-                        onTap: () => setState(() => _showControls = !_showControls),
+                        onTap: () =>
+                            setState(() => _showControls = !_showControls),
+                      ),
+                      const SizedBox(width: 8),
+                      TDButton(
+                        text: onlyIngredients ? '显示销售商品' : '仅显示原材料',
+                        size: TDButtonSize.small,
+                        type: TDButtonType.text,
+                        onTap: () =>
+                            setState(() => onlyIngredients = !onlyIngredients),
                       ),
                     ],
                   ),
@@ -275,6 +320,28 @@ class _ProductsPageState extends State<ProductsPage> {
                       ],
                     ),
                   ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TDInput(
+                          controller: ingSearchCtrl,
+                          hintText: '搜索原材料名称或单位',
+                          onChanged: (_) => _onIngSearchChanged(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TDButton(
+                        text: '清空',
+                        size: TDButtonSize.small,
+                        type: TDButtonType.text,
+                        onTap: () {
+                          ingSearchCtrl.clear();
+                          _applyIngSearch();
+                        },
+                      ),
+                    ],
+                  ),
                   if (errorText.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
@@ -291,108 +358,185 @@ class _ProductsPageState extends State<ProductsPage> {
                   ? const Center(child: CircularProgressIndicator())
                   : ListView(
                       children: [
-                        for (int idx = 0; idx < viewItems.length; idx++)
-                          Column(
-                            children: [
-                              TDCellGroup(
-                                cells: [
-                                  TDCell(
-                                    title:
-                                        '${(viewItems[idx] as Map<String, dynamic>)['product_name'] ?? ''}',
-                                    description:
-                                        '编号: ${(viewItems[idx] as Map<String, dynamic>)['product_id'] ?? ''}  价格: ${(viewItems[idx] as Map<String, dynamic>)['price'] ?? ''}  销售数: ${(viewItems[idx] as Map<String, dynamic>)['sales_number'] ?? ''}  日均: ${(viewItems[idx] as Map<String, dynamic>)['avg_sales_per_day'] ?? ''}',
-                                  ),
-                                ],
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 4,
+                        if (!onlyIngredients)
+                          for (int idx = 0; idx < viewItems.length; idx++)
+                            Column(
+                              children: [
+                                TDCellGroup(
+                                  cells: [
+                                    TDCell(
+                                      title:
+                                          '${(viewItems[idx] as Map<String, dynamic>)['product_name'] ?? ''}',
+                                      description:
+                                          '编号: ${(viewItems[idx] as Map<String, dynamic>)['product_id'] ?? ''}  价格: ${(viewItems[idx] as Map<String, dynamic>)['price'] ?? ''}  销售数: ${(viewItems[idx] as Map<String, dynamic>)['sales_number'] ?? ''}  日均: ${(viewItems[idx] as Map<String, dynamic>)['avg_sales_per_day'] ?? ''}',
+                                    ),
+                                  ],
                                 ),
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        if (expanded.contains(idx)) {
-                                          expanded.remove(idx);
-                                        } else {
-                                          expanded.add(idx);
-                                        }
-                                      });
-                                    },
-                                    child: Text(
-                                      expanded.contains(idx) ? '▼ 收起' : '▶ 展开',
-                                      style: const TextStyle(
-                                        color: Colors.blue,
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          if (expanded.contains(idx)) {
+                                            expanded.remove(idx);
+                                          } else {
+                                            expanded.add(idx);
+                                          }
+                                        });
+                                      },
+                                      child: Text(
+                                        expanded.contains(idx)
+                                            ? '▼ 收起'
+                                            : '▶ 展开',
+                                        style: const TextStyle(
+                                          color: Colors.blue,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              if (expanded.contains(idx))
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        '菜谱制作方法',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      ..._recipeLines(idx).map(
-                                        (x) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            left: 12,
-                                            top: 4,
+                                if (expanded.contains(idx))
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          '菜谱制作方法',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
                                           ),
-                                          child: Text('- $x'),
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Builder(builder: (_) {
-                                        final details = (((viewItems[idx] as Map<String, dynamic>)['details']) ?? {}) as Map;
-                                        final rows = details.entries.toList();
-                                        if (rows.isEmpty) {
-                                          return const Text('暂无关键指标');
-                                        }
-                                        return Table(
-                                          columnWidths: const {
-                                            0: FlexColumnWidth(2),
-                                            1: FlexColumnWidth(3),
+                                        ..._recipeLines(idx).map(
+                                          (x) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 12,
+                                              top: 4,
+                                            ),
+                                            child: Text('- $x'),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Builder(
+                                          builder: (_) {
+                                            final details =
+                                                (((viewItems[idx]
+                                                            as Map<
+                                                              String,
+                                                              dynamic
+                                                            >)['details']) ??
+                                                        {})
+                                                    as Map;
+                                            final rows = details.entries
+                                                .toList();
+                                            if (rows.isEmpty) {
+                                              return const Text('暂无关键指标');
+                                            }
+                                            return Table(
+                                              columnWidths: const {
+                                                0: FlexColumnWidth(2),
+                                                1: FlexColumnWidth(3),
+                                              },
+                                              border: TableBorder.symmetric(
+                                                inside: BorderSide(
+                                                  color: Colors.grey,
+                                                  width: 0.5,
+                                                ),
+                                              ),
+                                              children: [
+                                                for (final kv in rows)
+                                                  TableRow(
+                                                    children: [
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              vertical: 6,
+                                                            ),
+                                                        child: Text(
+                                                          kv.key.toString(),
+                                                          style:
+                                                              const TextStyle(
+                                                                color:
+                                                                    Colors.grey,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              vertical: 6,
+                                                            ),
+                                                        child: Text(
+                                                          kv.value.toString(),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                              ],
+                                            );
                                           },
-                                          border: TableBorder.symmetric(
-                                            inside: BorderSide(color: Colors.grey, width: 0.5),
-                                          ),
-                                          children: [
-                                            for (final kv in rows)
-                                              TableRow(children: [
-                                                Padding(
-                                                  padding: const EdgeInsets.symmetric(vertical: 6),
-                                                  child: Text(kv.key.toString(), style: const TextStyle(color: Colors.grey)),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Builder(
+                                          builder: (_) {
+                                            final recipe =
+                                                ((viewItems[idx]
+                                                            as Map<
+                                                              String,
+                                                              dynamic
+                                                            >)['recipe'] ??
+                                                        {})
+                                                    as Map;
+                                            final trace =
+                                                (recipe['trace'] as List?) ??
+                                                [];
+                                            if (trace.isEmpty) {
+                                              return const SizedBox.shrink();
+                                            }
+                                            return Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  '配方分解步骤',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
                                                 ),
-                                                Padding(
-                                                  padding: const EdgeInsets.symmetric(vertical: 6),
-                                                  child: Text(kv.value.toString()),
-                                                ),
-                                              ])
-                                          ],
-                                        );
-                                      }),
-                                    ],
+                                                const SizedBox(height: 6),
+                                                for (final step in trace.take(
+                                                  50,
+                                                ))
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 4,
+                                                        ),
+                                                    child: _traceRow(
+                                                      step as Map,
+                                                    ),
+                                                  ),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                            ],
-                          ),
+                              ],
+                            ),
                         const SizedBox(height: 12),
                         TDCell(title: '原材料使用统计（基于当前筛选结果）'),
-                        if (ingAgg.isEmpty)
+                        if (ingAggView.isEmpty)
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 8),
                             child: Text(
@@ -403,7 +547,7 @@ class _ProductsPageState extends State<ProductsPage> {
                         else
                           TDCellGroup(
                             cells: [
-                              for (final ing in ingAgg)
+                              for (final ing in ingAggView)
                                 TDCell(
                                   title: '${ing['name']}',
                                   description:
@@ -439,6 +583,10 @@ class _ProductsPageState extends State<ProductsPage> {
     statusText = '共 ${viewItems.length} 条记录';
     expanded.clear();
     _computeIngredients();
+    // 查询/筛选后尝试保留后端值，否则回退本地计算
+    if (salesTotal <= 0) {
+      _computeSalesTotal();
+    }
     setState(() {});
     TDToast.showText('已应用筛选，共 ${viewItems.length} 条', context: context);
   }
@@ -482,9 +630,10 @@ class _ProductsPageState extends State<ProductsPage> {
       return {
         'name': parts[0],
         'unit': parts[1],
-        'total': double.parse(e.value.toStringAsFixed(3)),
+        'total': double.parse(e.value.toStringAsFixed(2)),
       };
     }).toList();
+    _applyIngSearch();
   }
 
   double _parseNumber(dynamic v) {
@@ -499,6 +648,32 @@ class _ProductsPageState extends State<ProductsPage> {
         ((viewItems[idx] as Map<String, dynamic>)['recipe'] ?? {}) as Map;
     final lines = (recipe['lines'] ?? []) as List;
     return lines.map((e) => e.toString()).toList();
+  }
+
+  Widget _traceRow(Map step) {
+    final depth = (step['depth'] ?? '').toString();
+    final src = (step['source'] as Map?) ?? {};
+    final drv = (step['derived'] as Map?) ?? {};
+    final sName = (src['name'] ?? '').toString();
+    final sAmt = (src['amount'] ?? '').toString();
+    final sUnit = (src['unit'] ?? '').toString();
+    final dName = (drv['name'] ?? '').toString();
+    final dAmt = (drv['amount'] ?? '').toString();
+    final dUnit = (drv['unit'] ?? '').toString();
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(depth, style: const TextStyle(color: Color(0xFF2563EB))),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Text('源: $sName $sAmt$sUnit → 派生: $dName $dAmt$dUnit')),
+      ],
+    );
   }
 
   void _onSearchChanged() {
@@ -519,18 +694,86 @@ class _ProductsPageState extends State<ProductsPage> {
       statusText = '共 ${viewItems.length} 条记录';
       expanded.clear();
       _computeIngredients();
+      if (salesTotal <= 0) {
+        _computeSalesTotal();
+      }
       setState(() {});
     });
+  }
+
+  void _onIngSearchChanged() {
+    _ingDebounce?.cancel();
+    _ingDebounce = Timer(const Duration(milliseconds: 300), _applyIngSearch);
+  }
+
+  void _applyIngSearch() {
+    final q = ingSearchCtrl.text.trim().toLowerCase();
+    if (q.isEmpty) {
+      ingAggView = List<Map<String, dynamic>>.from(ingAgg);
+    } else {
+      ingAggView = ingAgg.where((m) {
+        final name = (m['name'] ?? '').toString().toLowerCase();
+        final unit = (m['unit'] ?? '').toString().toLowerCase();
+        return name.contains(q) || unit.contains(q);
+      }).toList();
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _computeSalesTotal() {
+    double sum = 0.0;
+    for (final p in viewItems) {
+      final m = p as Map<String, dynamic>;
+      double v = 0.0;
+      final candidates = [
+        m['总销售金额'],
+        m['total_sales_amount'],
+        m['sales_total'],
+      ];
+      for (final c in candidates) {
+        final n = _parseNumber(c);
+        if (n > 0) {
+          v = n;
+          break;
+        }
+      }
+      if (v <= 0) {
+        final price = _parseNumber(m['price']);
+        final qty = _parseNumber(m['sales_number']);
+        if (price > 0 && qty > 0) {
+          v = price * qty;
+        }
+      }
+      sum += v;
+    }
+    salesTotal = double.parse(sum.toStringAsFixed(2));
+  }
+
+  String _fmtCurrency(double v) {
+    final s = v.toStringAsFixed(2);
+    final parts = s.split('.');
+    final intPart = parts[0];
+    final dec = parts.length > 1 ? parts[1] : '00';
+    final rev = intPart.split('').reversed.toList();
+    final buf = <String>[];
+    for (int i = 0; i < rev.length; i++) {
+      buf.add(rev[i]);
+      if ((i + 1) % 3 == 0 && i + 1 < rev.length) buf.add(',');
+    }
+    final withCommas = buf.reversed.join('');
+    return '$withCommas.$dec';
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _ingDebounce?.cancel();
     chooseDateCtrl.dispose();
     startDateCtrl.dispose();
     endDateCtrl.dispose();
     filterCtrl.dispose();
     searchCtrl.dispose();
+    ingSearchCtrl.dispose();
     super.dispose();
   }
 }

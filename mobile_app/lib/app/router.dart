@@ -11,22 +11,52 @@ import '../features/weekly/weekly_schedule_page.dart';
 import '../features/schedule_ai/schedule_ai_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/schedule/daily_schedule_page.dart';
+import '../features/menu/menu_admin_page.dart';
 
 GoRouter createRouter() {
   return GoRouter(
     routes: [
       GoRoute(path: '/', builder: (context, state) => const HomePage()),
       GoRoute(path: '/borrow', builder: (context, state) => const BorrowPage()),
-      GoRoute(path: '/products', builder: (context, state) => const ProductsPage()),
+      GoRoute(
+        path: '/products',
+        builder: (context, state) => const ProductsPage(),
+      ),
       GoRoute(path: '/order', builder: (context, state) => const OrderPage()),
       GoRoute(path: '/ledger', builder: (context, state) => const LedgerPage()),
-      GoRoute(path: '/attendance', builder: (context, state) => const AttendancePage()),
-      GoRoute(path: '/sales', builder: (context, state) => const SalesSummaryPage()),
-      GoRoute(path: '/revenue', builder: (context, state) => const RevenuePage()),
-      GoRoute(path: '/weekly', builder: (context, state) => const WeeklySchedulePage()),
-      GoRoute(path: '/schedule-ai', builder: (context, state) => const ScheduleAIPage()),
-      GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
-      GoRoute(path: '/daily', builder: (context, state) => DailySchedulePage(initialDate: state.uri.queryParameters['date'])),
+      GoRoute(
+        path: '/attendance',
+        builder: (context, state) => const AttendancePage(),
+      ),
+      GoRoute(
+        path: '/sales',
+        builder: (context, state) => const SalesSummaryPage(),
+      ),
+      GoRoute(
+        path: '/revenue',
+        builder: (context, state) => const RevenuePage(),
+      ),
+      GoRoute(
+        path: '/weekly',
+        builder: (context, state) => const WeeklySchedulePage(),
+      ),
+      GoRoute(
+        path: '/schedule-ai',
+        builder: (context, state) => const ScheduleAIPage(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/daily',
+        builder: (context, state) =>
+            DailySchedulePage(initialDate: state.uri.queryParameters['date']),
+      ),
+      GoRoute(
+        path: '/menu',
+        builder: (context, state) => const MenuAdminPage(),
+      ),
     ],
   );
 }

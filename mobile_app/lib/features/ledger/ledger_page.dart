@@ -457,11 +457,12 @@ class _LedgerPageState extends State<LedgerPage> {
         statusText = '状态: ${status ?? '-'}，已处理$loaded，失败$failed';
         setState(() {});
         if (status == 'success') {
-          if (mounted)
+          if (mounted) {
             TDToast.showText(
               failed == 0 ? '上传成功：已处理$loaded，失败$failed' : '上传完成但存在失败$failed',
               context: context,
             );
+          }
           final summary = {
             'status': status,
             'loaded': loaded,

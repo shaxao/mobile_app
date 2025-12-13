@@ -7,6 +7,8 @@ from bs4 import BeautifulSoup
 import datetime
 from flask_cors import CORS
 from datetime import timedelta, datetime as dt, date
+from menu_system.api import bp as menu_bp
+from menu_system.services import init_db
 import threading
 import functools
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +17,8 @@ import urllib.parse
 
 app = Flask(__name__, static_url_path='', static_folder='.')
 CORS(app)
+app.register_blueprint(menu_bp)
+init_db()
 
 # 简单的内存缓存实现
 class SimpleCache:
@@ -398,30 +402,27 @@ def _parse_fraction(num_str):
     except Exception:
         return None
 
-def parse_menu_markdown(file_path='萨莉亚菜单.md'):
+def parse_menu_markdown_struct(file_path='萨莉亚菜单.md'):
     recipes = {}
+    sections_map = {}
+    current_section = None
+    current_recipe = None
+    body_lines = []
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            text = f.read()
+            lines = f.read().splitlines()
     except Exception:
-        return recipes
+        return recipes, sections_map
 
-    # 按二级标题拆分菜品块
-    blocks = re.split(r"\n##\s+", text)
-    for block in blocks[1:]:
-        lines = block.splitlines()
-        if not lines:
-            continue
-        name = lines[0].strip()
-        body_lines = [ln.strip().replace('\u3000', ' ').lstrip('•').strip() for ln in lines[1:] if ln.strip()]
-
-        ingredients = []
-        for ln in body_lines:
+    def flush_recipe(name, section, body):
+        if not name:
+            return
+        ings = []
+        for ln in body:
             ln_clean = re.sub(r"\([^\)]*\)", "", ln).strip()
             m = re.search(r"^(?P<name>[^\d]+?)\s*(?P<num>(\d+(?:\.\d+)?|\d+\s*-\s*\d+|\d+/\d+))\s*(?P<unit>g|ml|cc|个|颗|片|根|袋|圈|下|勺)\b", ln_clean)
             if m:
                 ing_name = m.group('name').strip()
-                # 规范化：去除前缀编号或枚举符号（①②③、数字.、数字、、中文一二三等）
                 ing_name = re.sub(r"^(?:[\u2460-\u2473]|[\(（]?\d+[\)）]?|[一二三四五六七八九十]+)[、.．]?\s*", "", ing_name)
                 num_str = m.group('num').strip()
                 if '-' in num_str:
@@ -429,16 +430,33 @@ def parse_menu_markdown(file_path='萨莉亚菜单.md'):
                 qty = _parse_fraction(num_str)
                 unit = m.group('unit')
                 if qty is not None:
-                    ingredients.append({'name': ing_name, 'amount': qty, 'unit': unit})
+                    ings.append({'name': ing_name, 'amount': qty, 'unit': unit})
+        recipes[name] = {'ingredients': ings, 'lines': list(body), 'section': section}
+        sections_map[name] = section
 
-        recipes[name] = {
-            'ingredients': ingredients,
-            'lines': body_lines,
-        }
-    return recipes
+    for ln in lines:
+        if ln.strip().startswith('# '):
+            # 切换主标题（如 备份1 揭示用 / 备份2 揭示用 / 其它）
+            # 刷新上一个recipe
+            flush_recipe(current_recipe, current_section, body_lines)
+            current_section = ln.strip()[2:].strip()
+            current_recipe = None
+            body_lines = []
+        elif ln.strip().startswith('## '):
+            # 切换二级菜品标题
+            flush_recipe(current_recipe, current_section, body_lines)
+            current_recipe = ln.strip()[3:].strip()
+            body_lines = []
+        else:
+            # 累积正文行
+            if ln.strip():
+                body_lines.append(ln.strip().replace('\u3000', ' ').lstrip('•').strip())
+    # 刷新最后一个块
+    flush_recipe(current_recipe, current_section, body_lines)
+    return recipes, sections_map
 
 # 解析菜单（模块加载时）
-MENU_RECIPES = parse_menu_markdown()
+MENU_RECIPES, MENU_SECTIONS = parse_menu_markdown_struct()
 
 # ----------------------- 备份类食材BOM展开 -----------------------
 # 近似单位换算（用于质量占比分配）；如需更精确，可根据实际包规调整
@@ -479,28 +497,75 @@ def _distribute_by_mass(total_use_g, components):
                 # 对未知质量的部件，暂不分配（避免误差）；可按需补全单位映射
                 continue
             share = (m / total_mass) * total_use_g
-            out.append({'name': c['name'], 'amount': round(share, 4), 'unit': 'g'})
+            out.append({'name': c['name'], 'amount': round(share, 2), 'unit': 'g'})
         return out
     # 若无法计算质量占比，且组件单位均为袋/罐/盒，按件数平均分配到克
     units = {c['unit'] for c in components}
     if units.issubset({'袋', '罐', '盒'}) and len(components) > 0:
         avg = total_use_g / len(components)
-        return [{'name': c['name'], 'amount': round(avg, 4), 'unit': 'g'} for c in components]
+        return [{'name': c['name'], 'amount': round(avg, 2), 'unit': 'g'} for c in components]
     return None
 
-def _expand_processed_ingredient(ing, menu_recipes):
-    name = ing.get('name')
-    if name not in PROCESSED_SET:
+def _distribute_by_numeric(total_use_val, components):
+    s = 0.0
+    for c in components:
+        try:
+            s += float(c.get('amount') or 0)
+        except Exception:
+            pass
+    if s <= 0:
         return None
-    recipe = menu_recipes.get(name)
-    if not recipe or not recipe.get('ingredients'):
+    out = []
+    for c in components:
+        try:
+            base = float(c.get('amount') or 0)
+        except Exception:
+            base = 0.0
+        v = (base / s) * float(total_use_val)
+        u = c.get('unit')
+        if u in ('g', 'ml', 'cc'):
+            v = round(v, 1)
+        else:
+            v = round(v, 2)
+        out.append({'name': c.get('name'), 'amount': v, 'unit': u or ''})
+    return out
+
+def _find_recipe_with_priority(name, recipes, sections_map, priority_sections=("备份1 揭示用", "备份2 揭示用")):
+    # 精确匹配优先
+    if name in recipes:
+        rec = recipes[name]
+        if rec.get('section') in priority_sections:
+            return rec
+    # 归一化模糊匹配
+    nm = re.sub(r"\s+", "", name or '')
+    candidate = None
+    for k, rec in recipes.items():
+        kk = re.sub(r"\s+", "", k)
+        if kk == nm or kk in nm or nm in kk:
+            if rec.get('section') in priority_sections:
+                return rec
+            if candidate is None:
+                candidate = rec
+    return candidate
+
+def _expand_processed_ingredient(ing, menu_recipes, sections_map=None):
+    name = ing.get('name')
+    recipe = _find_recipe_with_priority(name, menu_recipes, sections_map or {})
+    # 若未在备份区找到，则尝试处理集合中的特例
+    if not recipe:
+        if name not in PROCESSED_SET:
+            return None
+        recipe = menu_recipes.get(name)
+        if not recipe:
+            return None
+    if not recipe.get('ingredients'):
         return None
     use_amount = ing.get('amount')
     use_unit = ing.get('unit')
-    use_g = _approx_grams(use_amount, use_unit)
     components = recipe['ingredients']
 
     # 特例：多利亚饭按单份配比（146g白米饭、2g利梭多粉、2g色拉油）
+    use_g = _approx_grams(use_amount, use_unit)
     if name == '多利亚饭' and use_g is not None:
         total = 146 + 2 + 2
         return [
@@ -510,10 +575,19 @@ def _expand_processed_ingredient(ing, menu_recipes):
         ]
 
     # 常规路径：按质量占比分配
-    if use_g is not None:
-        distributed = _distribute_by_mass(use_g, components)
-        if distributed:
-            return distributed
+    if recipe.get('section') in ("备份1 揭示用", "备份2 揭示用"):
+        try:
+            total_use_val = float(use_amount or 0)
+        except Exception:
+            total_use_val = 0.0
+        dist = _distribute_by_numeric(total_use_val, components)
+        if dist:
+            return dist
+    else:
+        if use_g is not None:
+            distributed = _distribute_by_mass(use_g, components)
+            if distributed:
+                return distributed
 
     # 使用量为“个/根/片/颗”时，估算质量后分配（需实际业务校正 UNIT_MASS_HINTS）
     if use_unit in ('个', '根', '片', '颗'):
@@ -523,19 +597,26 @@ def _expand_processed_ingredient(ing, menu_recipes):
             return distributed
     return None
 
-def _expand_recursive(ing, menu_recipes, depth=0, max_depth=4):
-    """将加工/备份类食材递归展开到最底层原料。
-    为避免死循环，限制最大递归深度。
-    """
+def _expand_recursive(ing, menu_recipes, sections_map=None, depth=0, max_depth=4, trace=None):
+    """将加工/备份类食材递归展开到最底层原料，并记录路径与计算步骤。"""
     if depth > max_depth:
         return [ing]
-    ex = _expand_processed_ingredient(ing, menu_recipes)
+    ex = _expand_processed_ingredient(ing, menu_recipes, sections_map)
     if not ex:
         return [ing]
     out = []
     for c in ex:
-        if c.get('name') in PROCESSED_SET:
-            out.extend(_expand_recursive(c, menu_recipes, depth+1, max_depth))
+        step = {
+            'depth': depth,
+            'source': ing,
+            'derived': c,
+        }
+        if trace is not None:
+            trace.append(step)
+        # 若该部件仍可在备份区/配方中展开，则递归
+        next_recipe = _find_recipe_with_priority(c.get('name'), menu_recipes, sections_map or {})
+        if next_recipe or c.get('name') in PROCESSED_SET:
+            out.extend(_expand_recursive(c, menu_recipes, sections_map, depth+1, max_depth, trace))
         else:
             out.append(c)
     return out
@@ -565,8 +646,29 @@ def _fetch_products(custom_start_date=None, custom_end_date=None, seldate=0, cho
     soup = BeautifulSoup(response2.text, 'html.parser')
 
     products = []
+    total_price_raw = ""
+    total_price_num = 0.0
     current_id = None
     current_name = None
+    right_div = soup.find_all('div', {'id': 'rightTitle'})
+    try:
+        if right_div and len(right_div) > 0:
+            tr_tags = right_div[0].find_all('tr')
+            for idx, tr in enumerate(tr_tags):
+                # 经验规则：第4行（索引3）第9列为总销售金额
+                if idx == 3:
+                    tds = tr.find_all('td')
+                    if len(tds) > 8:
+                        total_price_raw = tds[8].get_text(strip=True)
+                    break
+    except Exception:
+        total_price_raw = ""
+    # 清洗为数值
+    try:
+        cleaned = re.sub(r"[^0-9\.-]", "", (total_price_raw or "").replace(",", ""))
+        total_price_num = float(cleaned) if cleaned else 0.0
+    except Exception:
+        total_price_num = 0.0
     i = 4
     while True:
         product_rows = soup.find_all('tr', {'id': f'detail{i}'})
@@ -615,17 +717,23 @@ def _fetch_products(custom_start_date=None, custom_end_date=None, seldate=0, cho
                             recipe = v
                             break
                 if recipe:
-                    # 展开备份类食材到最底层原料
+                    # 展开备份类食材到最底层原料，记录追踪
                     expanded = []
+                    trace = []
                     for ing in recipe.get('ingredients', []):
-                        expanded.extend(_expand_recursive(ing, MENU_RECIPES))
+                        expanded.extend(_expand_recursive(ing, MENU_RECIPES, MENU_SECTIONS, trace=trace))
                     recipe_out = dict(recipe)
                     recipe_out['ingredients_expanded'] = expanded
+                    recipe_out['trace'] = trace
                     item['recipe'] = recipe_out
                 products.append(item)
                 current_id, current_name = None, None
         i += 1
-    return products
+    return {
+        'items': products,
+        'total_price': total_price_raw,
+        'total_price_num': total_price_num,
+    }
 
 @app.route('/api/products', methods=['POST'])
 def api_products():
@@ -635,8 +743,54 @@ def api_products():
         chooseData = payload_in.get('chooseData')
         custom_start_date = payload_in.get('custom_start_date')
         custom_end_date = payload_in.get('custom_end_date')
-        products = _fetch_products(custom_start_date, custom_end_date, seldate, chooseData)
-        return jsonify({"data": products})
+        result = _fetch_products(custom_start_date, custom_end_date, seldate, chooseData)
+        if isinstance(result, dict):
+            return jsonify({
+                "data": result.get('items', []),
+                "total_price": result.get('total_price', ''),
+                "total_price_num": result.get('total_price_num', 0.0),
+            })
+        # 兼容：若返回旧格式列表
+        return jsonify({"data": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test/compute', methods=['GET'])
+def api_test_compute():
+    try:
+        comp = [
+            {'name': '速冻菠菜段', 'amount': 2000, 'unit': 'g'},
+            {'name': '大豆油', 'amount': 60, 'unit': 'g'},
+            {'name': '牛排粉', 'amount': 24, 'unit': 'g'},
+        ]
+        total_use = 300
+        dist = _distribute_by_numeric(total_use, comp)
+        log = {
+            'total_use': total_use,
+            'components': comp,
+            'result': dist,
+        }
+        return jsonify(log)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# 兼容旧前端路径（不带 /api 前缀）
+@app.route('/products', methods=['POST'])
+def api_products_compat():
+    try:
+        payload_in = request.json or {}
+        seldate = int(payload_in.get('seldate', 0))
+        chooseData = payload_in.get('chooseData')
+        custom_start_date = payload_in.get('custom_start_date')
+        custom_end_date = payload_in.get('custom_end_date')
+        result = _fetch_products(custom_start_date, custom_end_date, seldate, chooseData)
+        if isinstance(result, dict):
+            return jsonify({
+                "data": result.get('items', []),
+                "total_price": result.get('total_price', ''),
+                "total_price_num": result.get('total_price_num', 0.0),
+            })
+        return jsonify({"data": result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+// import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 // 产品分析页不包含订货相关上传与排序功能
@@ -31,6 +32,12 @@ class _ProductsPageState extends State<ProductsPage> {
   Timer? _ingDebounce;
   List<Map<String, dynamic>> ingAggView = [];
   double salesTotal = 0.0;
+  // 菜单系统数据缓存
+  final Map<String, int> _dishVersionMap = {};
+  final Map<int, List<Map<String, dynamic>>> _recipeItemsCache = {};
+  final Map<int, DateTime> _recipeItemsCacheTs = {};
+  DateTime? _dishMapUpdatedAt;
+  bool _menuError = false;
 
   Future<void> _load() async {
     setState(() => loading = true);
@@ -67,6 +74,7 @@ class _ProductsPageState extends State<ProductsPage> {
       items = parsed;
       viewItems = List<dynamic>.from(items);
       statusText = '共 ${viewItems.length} 条记录';
+      _invalidateRecipeItemsCache();
       final Map<String, dynamic> map = raw is Map
           ? Map<String, dynamic>.from(raw)
           : <String, dynamic>{};
@@ -81,7 +89,7 @@ class _ProductsPageState extends State<ProductsPage> {
       } else {
         _computeSalesTotal();
       }
-      _computeIngredients();
+      await _computeIngredientsFromMenu();
     } catch (e) {
       errorText = e.toString();
       items = [];
@@ -143,6 +151,14 @@ class _ProductsPageState extends State<ProductsPage> {
                       ),
                     ],
                   ),
+                  if (_menuError)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        '菜单数据获取失败，已使用本地计算',
+                        style: TextStyle(color: Colors.orange, fontSize: 12),
+                      ),
+                    ),
                   if (_showControls) ...[
                     const SizedBox(height: 8),
                     Row(
@@ -564,7 +580,7 @@ class _ProductsPageState extends State<ProductsPage> {
     );
   }
 
-  void _applyFilter() {
+  void _applyFilter() async {
     final raw = filterCtrl.text.trim();
     if (raw.isEmpty) {
       viewItems = List<dynamic>.from(items);
@@ -582,7 +598,8 @@ class _ProductsPageState extends State<ProductsPage> {
     }
     statusText = '共 ${viewItems.length} 条记录';
     expanded.clear();
-    _computeIngredients();
+    _invalidateRecipeItemsCache();
+    await _computeIngredientsFromMenu();
     // 查询/筛选后尝试保留后端值，否则回退本地计算
     if (salesTotal <= 0) {
       _computeSalesTotal();
@@ -591,21 +608,45 @@ class _ProductsPageState extends State<ProductsPage> {
     TDToast.showText('已应用筛选，共 ${viewItems.length} 条', context: context);
   }
 
-  void _computeIngredients() {
+  Future<void> _computeIngredientsFromMenu() async {
     final Map<String, double> agg = {};
-    final processedSet = {
-      '肉酱',
-      '加工去皮茄',
-      '加工去皮切',
-      '去皮切',
-      '土豆泥备份',
-      '白沙司',
-      '榴莲酱',
-      '多利亚饭',
-      '明太子奶油酱',
-      '奶酪汁',
-      '薯饼备份',
-    };
+    try {
+      await _ensureDishVersionMap();
+      for (final p in viewItems) {
+        final pm = p as Map<String, dynamic>;
+        final sales = _parseNumber(pm['sales_number']);
+        if (sales <= 0) continue;
+        final dishName = (pm['product_name'] ?? '').toString();
+        final items = await _getRecipeItemsByDishName(dishName);
+        for (final it in items) {
+          final name = (it['ingredient_name'] ?? it['name'] ?? '').toString();
+          final unit = (it['unit'] ?? '').toString();
+          final amount = _parseNumber(it['amount']);
+          if (name.isEmpty || unit.isEmpty || amount <= 0) continue;
+          final key = '$name|$unit';
+          agg[key] = (agg[key] ?? 0) + amount * sales;
+        }
+      }
+      ingAgg = agg.entries.map((e) {
+        final parts = e.key.split('|');
+        return {
+          'name': parts[0],
+          'unit': parts[1],
+          'total': double.parse(e.value.toStringAsFixed(2)),
+        };
+      }).toList();
+      _applyIngSearch();
+      _menuError = false;
+    } catch (e) {
+      _menuError = true;
+      TDToast.showText('菜单数据获取失败，已使用本地计算', context: context);
+      // 回退到本地 recipe 字段
+      _computeIngredientsLocalFallback();
+    }
+  }
+
+  void _computeIngredientsLocalFallback() {
+    final Map<String, double> agg = {};
     for (final p in viewItems) {
       final pm = p as Map<String, dynamic>;
       final sales = _parseNumber(pm['sales_number']);
@@ -620,7 +661,6 @@ class _ProductsPageState extends State<ProductsPage> {
         final unit = (m['unit'] ?? '').toString();
         final amount = _parseNumber(m['amount']);
         if (name.isEmpty || unit.isEmpty || amount <= 0) continue;
-        if (processedSet.contains(name)) continue;
         final key = '$name|$unit';
         agg[key] = (agg[key] ?? 0) + amount * sales;
       }
@@ -634,6 +674,72 @@ class _ProductsPageState extends State<ProductsPage> {
       };
     }).toList();
     _applyIngSearch();
+  }
+
+  Future<void> _ensureDishVersionMap() async {
+    final now = DateTime.now();
+    if (_dishMapUpdatedAt != null &&
+        now.difference(_dishMapUpdatedAt!).inMinutes < 5 &&
+        _dishVersionMap.isNotEmpty) {
+      return;
+    }
+    final root = ApiClient.serverRoot();
+    final resp = await ApiClient.get<Map<String, dynamic>>(
+      '$root/api/menu/tree',
+    );
+    final data = resp.data?['data'] as List? ?? [];
+    _dishVersionMap.clear();
+    for (final cu in data) {
+      final cats = (cu['categories'] as List? ?? []);
+      for (final cat in cats) {
+        final dishes = (cat['dishes'] as List? ?? []);
+        for (final d in dishes) {
+          final name = (d['name'] ?? '').toString();
+          final versions = (d['versions'] as List? ?? []);
+          if (versions.isEmpty) continue;
+          final active = versions.firstWhere(
+            (v) => v['active'] == true,
+            orElse: () => versions.first,
+          );
+          final vid = active['id'] as int;
+          _dishVersionMap[name] = vid;
+        }
+      }
+    }
+    _dishMapUpdatedAt = DateTime.now();
+  }
+
+  Future<List<Map<String, dynamic>>> _getRecipeItemsByDishName(
+    String dishName,
+  ) async {
+    final vid = _dishVersionMap[dishName];
+    if (vid == null) return [];
+    final cached = _recipeItemsCache[vid];
+    final ts = _recipeItemsCacheTs[vid];
+    if (cached != null && ts != null) {
+      final age = DateTime.now().difference(ts).inSeconds;
+      if (age < 60) return cached;
+    }
+    final root = ApiClient.serverRoot();
+    final resp = await ApiClient.get<Map<String, dynamic>>(
+      '$root/api/menu/recipes/$vid/items',
+    );
+    final rows = (resp.data?['data'] as List?) ?? [];
+    final items = rows
+        .map(
+          (e) => (e as Map)
+              .map((k, v) => MapEntry(k.toString(), v))
+              .cast<String, dynamic>(),
+        )
+        .toList();
+    _recipeItemsCache[vid] = items;
+    _recipeItemsCacheTs[vid] = DateTime.now();
+    return items;
+  }
+
+  void _invalidateRecipeItemsCache() {
+    _recipeItemsCache.clear();
+    _recipeItemsCacheTs.clear();
   }
 
   double _parseNumber(dynamic v) {
@@ -678,7 +784,7 @@ class _ProductsPageState extends State<ProductsPage> {
 
   void _onSearchChanged() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
       final q = searchCtrl.text.trim();
       if (q.isEmpty) {
         viewItems = List<dynamic>.from(items);
@@ -693,7 +799,8 @@ class _ProductsPageState extends State<ProductsPage> {
       }
       statusText = '共 ${viewItems.length} 条记录';
       expanded.clear();
-      _computeIngredients();
+      _invalidateRecipeItemsCache();
+      await _computeIngredientsFromMenu();
       if (salesTotal <= 0) {
         _computeSalesTotal();
       }

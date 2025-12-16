@@ -389,9 +389,19 @@ class _DishFormDialogState extends State<_DishFormDialog> {
       _descCtrl.text = widget.dish!['description'] ?? '';
       final versions = widget.dish!['versions'] as List?;
       if (versions != null && versions.isNotEmpty) {
-        _loadExistingItems(versions[0]['id']);
+        _loadExistingItems(_activeVersionId(versions));
       }
     }
+  }
+
+  int _activeVersionId(List versions) {
+    final active =
+        versions.firstWhere(
+              (v) => (v as Map)['active'] == true,
+              orElse: () => versions.first,
+            )
+            as Map;
+    return active['id'] as int;
   }
 
   Future<void> _loadExistingItems(int versionId) async {
@@ -569,7 +579,7 @@ class _DishFormDialogState extends State<_DishFormDialog> {
         );
         final versions = widget.dish!['versions'] as List?;
         if (versions != null && versions.isNotEmpty) {
-          final vId = versions[0]['id'];
+          final vId = _activeVersionId(versions);
           await ApiClient.put(
             '$root/api/menu/recipes/$vId/items',
             data: {'items': itemsPayload},
@@ -724,7 +734,6 @@ class _CategoryManagerPageState extends State<_CategoryManagerPage> {
   // Simplest is a list of categories.
 
   List<dynamic> _flatCats = [];
-  bool _loading = false;
 
   @override
   void initState() {
@@ -984,11 +993,21 @@ class _DishTileState extends State<_DishTile> {
   final _addUnitCtrl = TextEditingController(text: 'g');
   List<dynamic> _suggestions = [];
 
+  int _activeVersionId(List versions) {
+    final active =
+        versions.firstWhere(
+              (v) => (v as Map)['active'] == true,
+              orElse: () => versions.first,
+            )
+            as Map;
+    return active['id'] as int;
+  }
+
   Future<void> _fetchItems() async {
     if (_items != null) return;
     final versions = widget.dish['versions'] as List?;
     if (versions == null || versions.isEmpty) return;
-    final vId = versions[0]['id'];
+    final vId = _activeVersionId(versions);
 
     setState(() => _loading = true);
     try {
@@ -1035,7 +1054,7 @@ class _DishTileState extends State<_DishTile> {
   Future<void> _saveItems() async {
     final versions = widget.dish['versions'] as List?;
     if (versions == null || versions.isEmpty) return;
-    final vId = versions[0]['id'];
+    final vId = _activeVersionId(versions);
     final payload = _itemsEditable
         .map(
           (e) => {

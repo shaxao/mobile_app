@@ -30,10 +30,7 @@ class _IngredientAdminPageState extends State<IngredientAdminPage> {
       final root = ApiClient.serverRoot();
       final resp = await ApiClient.get<Map<String, dynamic>>(
         '$root/api/menu/ingredients',
-        query: {
-          'name': _nameCtrl.text.trim(),
-          'type': _typeCtrl.text.trim(),
-        },
+        query: {'name': _nameCtrl.text.trim(), 'type': _typeCtrl.text.trim()},
       );
       _rows = (resp.data?['data'] as List?) ?? [];
     } catch (e) {
@@ -75,8 +72,14 @@ class _IngredientAdminPageState extends State<IngredientAdminPage> {
         title: const Text('确认删除'),
         content: const Text('删除选中配料？如被菜品使用，将被阻止。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除', style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除', style: TextStyle(color: Colors.red)),
+          ),
         ],
       ),
     );
@@ -111,14 +114,27 @@ class _IngredientAdminPageState extends State<IngredientAdminPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: _newNameCtrl, decoration: const InputDecoration(labelText: '名称 (必填)')),
-              TextField(controller: _newTypeCtrl, decoration: const InputDecoration(labelText: '类型')),
-              TextField(controller: _newStockCtrl, decoration: const InputDecoration(labelText: '库存量'), keyboardType: TextInputType.number),
+              TextField(
+                controller: _newNameCtrl,
+                decoration: const InputDecoration(labelText: '名称 (必填)'),
+              ),
+              TextField(
+                controller: _newTypeCtrl,
+                decoration: const InputDecoration(labelText: '类型'),
+              ),
+              TextField(
+                controller: _newStockCtrl,
+                decoration: const InputDecoration(labelText: '库存量'),
+                keyboardType: TextInputType.number,
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           ElevatedButton(onPressed: _create, child: const Text('保存')),
         ],
       ),
@@ -128,7 +144,12 @@ class _IngredientAdminPageState extends State<IngredientAdminPage> {
   void _showEditDialog(Map row) {
     final nameCtrl = TextEditingController(text: row['name'] ?? '');
     final typeCtrl = TextEditingController(text: row['type'] ?? '');
-    final stockCtrl = TextEditingController(text: (row['stock'] ?? 0).toString());
+    final stockCtrl = TextEditingController(
+      text: (row['stock'] ?? 0).toString(),
+    );
+    final unitCtrl = TextEditingController(
+      text: (row['default_unit'] ?? 'g').toString(),
+    );
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -138,29 +159,71 @@ class _IngredientAdminPageState extends State<IngredientAdminPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: '名称 (唯一)')),
-              TextField(controller: typeCtrl, decoration: const InputDecoration(labelText: '类型')),
-              TextField(controller: stockCtrl, decoration: const InputDecoration(labelText: '库存量'), keyboardType: TextInputType.number),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: '名称 (唯一)'),
+              ),
+              TextField(
+                controller: typeCtrl,
+                decoration: const InputDecoration(labelText: '类型'),
+              ),
+              TextField(
+                controller: stockCtrl,
+                decoration: const InputDecoration(labelText: '库存量'),
+                keyboardType: TextInputType.number,
+              ),
+              TextField(
+                controller: unitCtrl,
+                decoration: const InputDecoration(labelText: '单位'),
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          ElevatedButton(onPressed: () async {
-            try {
-              final root = ApiClient.serverRoot();
-              await ApiClient.put('$root/api/menu/ingredients/${row['id']}', data: {
-                'name': nameCtrl.text.trim(),
-                'type': typeCtrl.text.trim(),
-                'stock': double.tryParse(stockCtrl.text) ?? 0,
-              }, query: {'role': 'editor'});
-              Navigator.pop(ctx);
-              TDToast.showText('保存成功', context: context);
-              _load();
-            } catch (e) {
-              TDToast.showText('保存失败: $e', context: context);
-            }
-          }, child: const Text('保存')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                final root = ApiClient.serverRoot();
+                final resp = await ApiClient.put<Map<String, dynamic>>(
+                  '$root/api/menu/ingredients/${row['id']}',
+                  data: {
+                    'name': nameCtrl.text.trim(),
+                    'type': typeCtrl.text.trim(),
+                    'stock': double.tryParse(stockCtrl.text) ?? 0,
+                    'default_unit': unitCtrl.text.trim().isEmpty
+                        ? (row['default_unit'] ?? 'g')
+                        : unitCtrl.text.trim(),
+                  },
+                  query: {'role': 'editor'},
+                );
+                Navigator.pop(ctx);
+                TDToast.showText('保存成功', context: context);
+                final data = (resp.data?['data'] as Map?)?.map(
+                  (k, v) => MapEntry(k.toString(), v),
+                );
+                if (data != null) {
+                  // 乐观更新当前行
+                  setState(() {
+                    final idx = _rows.indexWhere(
+                      (e) => (e as Map)['id'] == row['id'],
+                    );
+                    if (idx >= 0) {
+                      _rows[idx] = data;
+                    }
+                  });
+                } else {
+                  _load();
+                }
+              } catch (e) {
+                TDToast.showText('保存失败: $e', context: context);
+              }
+            },
+            child: const Text('保存'),
+          ),
         ],
       ),
     );
@@ -173,7 +236,10 @@ class _IngredientAdminPageState extends State<IngredientAdminPage> {
         title: const Text('配料管理'),
         actions: [
           IconButton(onPressed: _showCreateDialog, icon: const Icon(Icons.add)),
-          IconButton(onPressed: _deleteSelected, icon: const Icon(Icons.delete, color: Colors.red)),
+          IconButton(
+            onPressed: _deleteSelected,
+            icon: const Icon(Icons.delete, color: Colors.red),
+          ),
         ],
       ),
       body: Column(
@@ -182,9 +248,21 @@ class _IngredientAdminPageState extends State<IngredientAdminPage> {
             padding: const EdgeInsets.all(8.0),
             child: Row(
               children: [
-                Expanded(child: TDInput(controller: _nameCtrl, hintText: '按名称筛选', onChanged: (_) => _load())),
+                Expanded(
+                  child: TDInput(
+                    controller: _nameCtrl,
+                    hintText: '按名称筛选',
+                    onChanged: (_) => _load(),
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: TDInput(controller: _typeCtrl, hintText: '按类型筛选', onChanged: (_) => _load())),
+                Expanded(
+                  child: TDInput(
+                    controller: _typeCtrl,
+                    hintText: '按类型筛选',
+                    onChanged: (_) => _load(),
+                  ),
+                ),
                 const SizedBox(width: 8),
                 TDButton(text: '刷新', onTap: _load),
               ],
@@ -199,14 +277,25 @@ class _IngredientAdminPageState extends State<IngredientAdminPage> {
                       final r = _rows[i] as Map;
                       final selected = _selected.contains(r['id']);
                       return ListTile(
-                        leading: Checkbox(value: selected, onChanged: (v) {
-                          setState(() {
-                            if (v == true) _selected.add(r['id']); else _selected.remove(r['id']);
-                          });
-                        }),
+                        leading: Checkbox(
+                          value: selected,
+                          onChanged: (v) {
+                            setState(() {
+                              if (v == true)
+                                _selected.add(r['id']);
+                              else
+                                _selected.remove(r['id']);
+                            });
+                          },
+                        ),
                         title: Text('${r['name']}'),
-                        subtitle: Text('类型: ${r['type'] ?? '-'} · 库存: ${r['stock']} · 单位: ${r['default_unit']}'),
-                        trailing: IconButton(icon: const Icon(Icons.edit), onPressed: () => _showEditDialog(r)),
+                        subtitle: Text(
+                          '类型: ${r['type'] ?? '-'} · 库存: ${r['stock']} · 单位: ${r['default_unit']}',
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () => _showEditDialog(r),
+                        ),
                       );
                     },
                   ),
@@ -216,4 +305,3 @@ class _IngredientAdminPageState extends State<IngredientAdminPage> {
     );
   }
 }
-

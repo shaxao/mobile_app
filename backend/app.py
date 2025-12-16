@@ -107,14 +107,27 @@ def _sort_order_path():
   _ensure_dir(UPLOAD_DIR)
   return os.path.join(UPLOAD_DIR, 'sort_order.txt')
 
+def _read_text_file(path):
+  try:
+    with open(path, 'rb') as f:
+      data = f.read()
+    for enc in ('utf-8', 'utf-8-sig', 'utf-16', 'utf-16-le', 'utf-16-be', 'gb18030'):
+      try:
+        return data.decode(enc)
+      except Exception:
+        continue
+    return data.decode('utf-8', errors='ignore')
+  except Exception as e:
+    raise e
+
 @app.get('/api/v1/sort-order')
 def get_sort_order():
   try:
     p = _sort_order_path()
     if not os.path.exists(p):
       return jsonify({'order': []})
-    with open(p, 'r', encoding='utf-8') as f:
-      lines = [x.strip() for x in f.read().splitlines() if x.strip()]
+    content = _read_text_file(p)
+    lines = [x.strip() for x in content.splitlines() if x.strip()]
     return jsonify({'order': lines})
   except Exception as e:
     return jsonify({'error': str(e)}), 500

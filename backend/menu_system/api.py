@@ -3,6 +3,7 @@ from sqlalchemy import select, func
 from .db import SessionLocal
 from .models import Cuisine, Category, Dish, RecipeVersion, RecipeItem, Ingredient, IngredientChangeLog, OperationLog
 from .services import init_db, import_markdown, compute_nutrition
+from .services import _get_or_create_ingredient_in_session
 from .services import upsert_nutrition, create_dish, update_dish, delete_dish, update_category, delete_category, merge_categories
 
 bp = Blueprint("menu", __name__, url_prefix="/api/menu")
@@ -219,7 +220,9 @@ def ingredients_list():
             "default_unit": r.default_unit,
             "updated_at": (r.updated_at.isoformat() if r.updated_at else None)
         } for r in rows]
-        return jsonify({"data": data})
+        resp = jsonify({"data": data})
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        return resp
 
 @bp.route("/ingredients", methods=["POST"])
 def ingredients_create():
@@ -246,7 +249,14 @@ def ingredients_create():
         s.refresh(it)
         s.add(OperationLog(action="create", entity_type="ingredient", entity_id=it.id, detail=f"create {it.name}"))
         s.commit()
-        return jsonify({"id": it.id})
+        data = {
+            "id": it.id, "name": it.name, "type": it.type, "stock": it.stock,
+            "default_unit": it.default_unit,
+            "updated_at": (it.updated_at.isoformat() if it.updated_at else None)
+        }
+        resp = jsonify({"id": it.id, "data": data})
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        return resp
 
 @bp.route("/ingredients/<int:id>", methods=["PUT"])
 def ingredients_update(id):
@@ -296,7 +306,15 @@ def ingredients_update(id):
         if changes:
             s.add(OperationLog(action="update", entity_type="ingredient", entity_id=id, detail=f"update {','.join([c[0] for c in changes])}"))
         s.commit()
-        return jsonify({"ok": True, "changes": len(changes)})
+        s.refresh(it)
+        data = {
+            "id": it.id, "name": it.name, "type": it.type, "stock": it.stock,
+            "default_unit": it.default_unit,
+            "updated_at": (it.updated_at.isoformat() if it.updated_at else None)
+        }
+        resp = jsonify({"ok": True, "changes": len(changes), "data": data})
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        return resp
 
 @bp.route("/ingredients", methods=["DELETE"])
 def ingredients_delete():
@@ -342,13 +360,26 @@ def dishes_create_with_items():
 def recipe_items_set(version_id):
     # Full replace items for a version
     items = request.json.get("items") or []
-    from .services import create_dish_with_version
     with SessionLocal() as s:
         rv = s.get(RecipeVersion, version_id)
         if not rv:
             return jsonify({"error": "not found"}), 404
-        # reuse helper: pass same dish/version to overwrite
-        create_dish_with_version(rv.dish_id, s.get(Dish, rv.dish_id).name, rv.version, items)
+        olds = s.execute(select(RecipeItem).where(RecipeItem.recipe_version_id == rv.id)).scalars().all()
+        for oi in olds:
+            s.delete(oi)
+        s.flush()
+        to_add = []
+        for idx, it in enumerate(items):
+            ing = _get_or_create_ingredient_in_session(s, (it.get("name") or "").strip(), it.get("unit") or "g")
+            to_add.append(RecipeItem(
+                recipe_version_id=rv.id,
+                ingredient_id=ing.id,
+                amount=float(it.get("amount") or 0),
+                unit=it.get("unit") or "g",
+                order_index=idx,
+            ))
+        if to_add:
+            s.add_all(to_add)
         s.add(OperationLog(action="update", entity_type="recipe_items", entity_id=version_id, detail=f"set {len(items)} items"))
         s.commit()
         return jsonify({"ok": True})

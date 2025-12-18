@@ -128,7 +128,8 @@ class _OrderPageState extends State<OrderPage> {
                             text: isSorted ? '恢复原序' : '按排序顺序',
                             size: TDButtonSize.small,
                             type: TDButtonType.text,
-                            onTap: () {
+                            onTap: () async {
+                              await _loadSortOrder();
                               if (viewItems.isEmpty) return;
                               if (!isSorted) {
                                 _originalView = List<Map<String, dynamic>>.from(
@@ -392,13 +393,23 @@ class _OrderPageState extends State<OrderPage> {
 
   int _paixuIndex(String productName) {
     if (sortOrder.isEmpty) return 1 << 30;
-    final exact = sortOrder.indexWhere((x) => x == productName);
+    final nName = _normName(productName);
+    final exact = sortOrder.indexWhere((x) => _normName(x) == nName);
     if (exact >= 0) return exact;
     for (int i = 0; i < sortOrder.length; i++) {
       final it = sortOrder[i];
-      if (productName.contains(it) || it.contains(productName)) return i;
+      final nIt = _normName(it);
+      if (nName.contains(nIt) || nIt.contains(nName)) return i;
     }
     return 1 << 30;
+  }
+
+  String _normName(String s) {
+    var t = (s).toString().trim();
+    t = t.replaceFirst(RegExp(r'^\\d+\\s*秒以上\\s*'), '');
+    t = t.replaceAll(RegExp(r'[\\s\\u3000]'), '');
+    t = t.replaceAll(RegExp(r'[，。、：:；;（）()【】\\[\\]\\-_/\\\\]'), '');
+    return t;
   }
 
   void _applySortOrder() {

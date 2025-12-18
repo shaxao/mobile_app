@@ -157,7 +157,16 @@ def upload_sort_file():
     if 'file' not in request.files:
       return jsonify({'error': '缺少文件'}), 400
     file = request.files['file']
-    content = file.read().decode('utf-8', errors='ignore')
+    data = file.read()
+    # 兼容多种文本编码，避免上传的文件为 UTF-16/GB18030 导致内容异常
+    for enc in ('utf-8', 'utf-8-sig', 'utf-16', 'utf-16-le', 'utf-16-be', 'gb18030'):
+      try:
+        content = data.decode(enc)
+        break
+      except Exception:
+        content = None
+    if content is None:
+      content = data.decode('utf-8', errors='ignore')
     lines = [x.strip() for x in content.splitlines() if x.strip()]
     p = _sort_order_path()
     _ensure_dir(os.path.dirname(p))

@@ -46,7 +46,11 @@ GoRouter createRouter() {
       ),
       GoRoute(
         path: '/settings',
-        builder: (context, state) => const SettingsPage(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final showTutorial = extra?['tutorial'] as bool? ?? false;
+          return SettingsPage(showTutorial: showTutorial);
+        },
       ),
       GoRoute(
         path: '/daily',

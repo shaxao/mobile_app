@@ -4,7 +4,13 @@ import '../constants/config.dart';
 
 class ApiClient {
   ApiClient._();
-  static final Dio _dio = Dio();
+  static final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+      sendTimeout: const Duration(seconds: 10),
+    ),
+  );
   static String _base = AppConfig.apiBase;
   static Future<void> initFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -53,8 +59,18 @@ class ApiClient {
     String path, {
     Object? data,
     Map<String, dynamic>? query,
+    Options? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
   }) {
-    return _dio.post<T>(_buildUrl(path), data: data, queryParameters: query);
+    return _dio.post<T>(
+      _buildUrl(path),
+      data: data,
+      queryParameters: query,
+      options: options,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
   }
 
   static Future<Response<T>> put<T>(

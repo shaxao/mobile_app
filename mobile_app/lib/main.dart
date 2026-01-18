@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 import 'app/router.dart';
@@ -20,6 +21,14 @@ class MyApp extends StatelessWidget {
       title: '萨莉亚移动端',
       theme: ThemeData(extensions: [TDThemeData.defaultData()], colorScheme: ColorScheme.fromSeed(seedColor: Colors.green)),
       routerConfig: router,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('zh', 'CN'),
+      ],
     );
   }
 }

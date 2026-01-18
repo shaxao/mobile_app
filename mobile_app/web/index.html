@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,21 +19,298 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Saliya Management System">
+  <!-- Fix: Add viewport meta tag to prevent initial scaling issues -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="mobile_app">
+  <meta name="apple-mobile-web-app-title" content="Saliya">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png" />
 
-  <title>mobile_app</title>
+  <title>萨利亚管理系统</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    .loading-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
+      background: #ffffff;
+      transition: opacity 0.8s ease-out;
+    }
+
+    #loading-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .center-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+      /* Let clicks pass to canvas */
+    }
+
+    .logo-text {
+      font-family: -apple-system, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: #0052D9;
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out forwards;
+    }
+
+    .loading-bar-bg {
+      width: 200px;
+      height: 4px;
+      background: #f0f0f0;
+      border-radius: 2px;
+      margin: 0 auto;
+      overflow: hidden;
+      opacity: 0;
+      animation: fadeIn 0.5s ease-out 0.5s forwards;
+    }
+
+    .loading-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0052D9, #00A870);
+      width: 0%;
+      transition: width 0.3s ease-out;
+      border-radius: 2px;
+    }
+
+    .status-text {
+      margin-top: 12px;
+      font-family: "Microsoft YaHei", monospace;
+      font-size: 12px;
+      color: #888;
+      min-height: 16px;
+      opacity: 0;
+      animation: fadeIn 0.5s ease-out 0.8s forwards;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      to {
+        opacity: 1;
+      }
+    }
+  </style>
+  <script>
+    // 强制清理旧缓存（防止 Service Worker 缓存导致更新不生效）
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        for (let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+
+    // 优化移动端加载：强制使用 HTML 渲染器
+    var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile || window.innerWidth <= 800) {
+      window.flutterWebRenderer = "html";
+      console.log("Mobile device detected: forcing HTML renderer");
+    }
+  </script>
 </head>
+
 <body>
+  <div class="loading-container">
+    <canvas id="loading-canvas"></canvas>
+    <div class="center-content">
+      <div class="logo-text">萨利亚管理系统</div>
+      <div class="loading-bar-bg">
+        <div class="loading-bar-fill" id="progress-fill"></div>
+      </div>
+      <div class="status-text" id="status-text">正在初始化...</div>
+    </div>
+  </div>
+
+  <script>
+    // --- Canvas Particle System ---
+    (function () {
+      var canvas = document.getElementById('loading-canvas');
+      var ctx = canvas.getContext('2d');
+      var width, height;
+      var particles = [];
+      var mouse = { x: -9999, y: -9999 };
+      var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      // Configuration
+      var PARTICLE_COUNT = isMobile ? 40 : 80;
+      var CONNECT_DISTANCE = 120;
+      var MOUSE_RADIUS = 150;
+      var PARTICLE_SPEED = 0.5;
+
+      function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      }
+
+      class Particle {
+        constructor() {
+          this.x = Math.random() * width;
+          this.y = Math.random() * height;
+          this.vx = (Math.random() - 0.5) * PARTICLE_SPEED;
+          this.vy = (Math.random() - 0.5) * PARTICLE_SPEED;
+          this.size = Math.random() * 2 + 1;
+          this.baseColor = '#0052D9';
+        }
+
+        update() {
+          this.x += this.vx;
+          this.y += this.vy;
+
+          // Bounce off edges
+          if (this.x < 0 || this.x > width) this.vx *= -1;
+          if (this.y < 0 || this.y > height) this.vy *= -1;
+
+          // Mouse interaction (Repel)
+          var dx = mouse.x - this.x;
+          var dy = mouse.y - this.y;
+          var distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < MOUSE_RADIUS) {
+            var forceDirectionX = dx / distance;
+            var forceDirectionY = dy / distance;
+            var force = (MOUSE_RADIUS - distance) / MOUSE_RADIUS;
+            var directionX = forceDirectionX * force * 3;
+            var directionY = forceDirectionY * force * 3;
+            this.x -= directionX;
+            this.y -= directionY;
+          }
+        }
+
+        draw() {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+          ctx.fillStyle = this.baseColor;
+          ctx.fill();
+        }
+      }
+
+      function init() {
+        resize();
+        for (var i = 0; i < PARTICLE_COUNT; i++) {
+          particles.push(new Particle());
+        }
+      }
+
+      function animate() {
+        ctx.clearRect(0, 0, width, height);
+
+        // Draw connections
+        ctx.lineWidth = 0.5;
+        for (var i = 0; i < particles.length; i++) {
+          var p1 = particles[i];
+          p1.update();
+          p1.draw();
+
+          for (var j = i + 1; j < particles.length; j++) {
+            var p2 = particles[j];
+            var dx = p1.x - p2.x;
+            var dy = p1.y - p2.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < CONNECT_DISTANCE) {
+              var opacity = 1 - (dist / CONNECT_DISTANCE);
+              ctx.strokeStyle = 'rgba(0, 82, 217, ' + opacity * 0.2 + ')'; // Brand color line
+              ctx.beginPath();
+              ctx.moveTo(p1.x, p1.y);
+              ctx.lineTo(p2.x, p2.y);
+              ctx.stroke();
+            }
+          }
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      // Event Listeners
+      window.addEventListener('resize', resize);
+      window.addEventListener('mousemove', function (e) {
+        mouse.x = e.x;
+        mouse.y = e.y;
+      });
+      window.addEventListener('touchmove', function (e) {
+        mouse.x = e.touches[0].clientX;
+        mouse.y = e.touches[0].clientY;
+      });
+
+      init();
+      animate();
+    })();
+
+    // --- Fake Progress System ---
+    (function () {
+      var bar = document.getElementById('progress-fill');
+      var status = document.getElementById('status-text');
+      var msgs = ["正在连接...", "加载资源中...", "准备系统...", "即将完成..."];
+      var progress = 0;
+      var interval = setInterval(function () {
+        progress += Math.random() * 5;
+        if (progress > 95) progress = 95; // Wait for real finish
+        bar.style.width = progress + '%';
+
+        // Change text based on progress
+        var index = Math.floor((progress / 100) * msgs.length);
+        if (msgs[index]) status.innerText = msgs[index];
+      }, 200);
+
+      // 定义移除 Loading 的函数，供 Dart 调用
+      window.removeLoading = function () {
+        clearInterval(interval);
+        var loading = document.querySelector('.loading-container');
+        var bar = document.getElementById('progress-fill');
+        var status = document.getElementById('status-text');
+
+        if (bar) bar.style.width = '100%';
+        if (status) status.innerText = '欢迎使用!';
+
+        if (loading) {
+          loading.style.opacity = '0';
+          setTimeout(function () {
+            loading.remove();
+          }, 800); // Wait for transition
+        }
+      };
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
+
 </html>

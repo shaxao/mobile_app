@@ -836,14 +836,24 @@ def ledger_process():
     except Exception:
       pass
     # allow explicit output path to avoid permission issues
+    def _default_out_path(tpl_path):
+      base_dir = os.path.dirname(tpl_path)
+      gen_dir = os.path.join(UPLOAD_DIR, 'generated')
+      _ensure_dir(gen_dir)
+      ymd = now.strftime('%Y%m%d')
+      fname = f"{ymd}-上海萨莉亚餐饮有限公司_餐饮_{ymd}.xlsx"
+      return os.path.join(gen_dir, fname)
     out_path = (body.get('output_path') or form.get('output_path') or '').strip()
+    if not out_path:
+      out_path = _default_out_path(template_path)
     try:
       if out_path:
         _ensure_dir(os.path.dirname(out_path))
         wb.save(out_path)
         return jsonify({'saved': True, 'path': os.path.abspath(out_path), 'errors': errors, 'unmatchedCodes': unmatched_codes, 'convMissingCodes': conv_missing_codes, 'sheetName': str(getattr(sh, 'title', '') or ''), 'usedOutputPath': True, 'auditTrail': audit_trail, 'validation': {'pass': validate_pass, 'fail': validate_fail, 'mismatches': validate_mismatches}, 'meta': {'updatedRows': updated_rows, 'deletedRows': len(del_rows), 'totalRows': updated_rows + len(del_rows), 'itemsCount': len(items), 'wasDryRun': False}})
-      wb.save(template_path)
-      return jsonify({'saved': True, 'path': os.path.abspath(template_path), 'errors': errors, 'unmatchedCodes': unmatched_codes, 'convMissingCodes': conv_missing_codes, 'sheetName': str(getattr(sh, 'title', '') or ''), 'usedOutputPath': False, 'auditTrail': audit_trail, 'validation': {'pass': validate_pass, 'fail': validate_fail, 'mismatches': validate_mismatches}, 'meta': {'updatedRows': updated_rows, 'deletedRows': len(del_rows), 'totalRows': updated_rows + len(del_rows), 'itemsCount': len(items), 'wasDryRun': False}})
+      # default save to generated file rather than overwrite template
+      wb.save(out_path)
+      return jsonify({'saved': True, 'path': os.path.abspath(out_path), 'errors': errors, 'unmatchedCodes': unmatched_codes, 'convMissingCodes': conv_missing_codes, 'sheetName': str(getattr(sh, 'title', '') or ''), 'usedOutputPath': True, 'auditTrail': audit_trail, 'validation': {'pass': validate_pass, 'fail': validate_fail, 'mismatches': validate_mismatches}, 'meta': {'updatedRows': updated_rows, 'deletedRows': len(del_rows), 'totalRows': updated_rows + len(del_rows), 'itemsCount': len(items), 'wasDryRun': False}})
     except Exception as e:
       try:
         dirn = os.path.dirname(template_path)
@@ -1139,6 +1149,13 @@ def ledger_process_upload():
         conv_path = cpath
       if conv_path is None:
         conv_path = ac or os.path.join(os.path.dirname(__file__), '..', '食品台账换算千克数 202510.xlsx')
+      if not output_path:
+        from datetime import datetime
+        now = datetime.now()
+        ymd = now.strftime('%Y%m%d')
+        gen_dir = os.path.join(UPLOAD_DIR, 'generated')
+        _ensure_dir(gen_dir)
+        output_path = os.path.join(gen_dir, f"上海萨莉亚餐饮有限公司_餐饮_{ymd}.xlsx")
       resp, code = _process_ledger_with_paths(at, conv_path, items, output_path, dry_run, _as_bool(request.form.get('strict_keep_written_only'), True))
       return jsonify(resp), code
     template_file = request.files['template']
@@ -1190,6 +1207,13 @@ def ledger_process_upload():
     st['files'] = files
     _write_ledger_store(st)
     dry_run = _as_bool(request.form.get('dry_run'), False)
+    if not output_path:
+      from datetime import datetime
+      now = datetime.now()
+      ymd = now.strftime('%Y%m%d')
+      gen_dir = os.path.join(UPLOAD_DIR, 'generated')
+      _ensure_dir(gen_dir)
+      output_path = os.path.join(gen_dir, f"上海萨莉亚餐饮有限公司_餐饮_{ymd}.xlsx")
     resp, code = _process_ledger_with_paths(tpath, conv_path, items, output_path, dry_run, _as_bool(request.form.get('strict_keep_written_only'), True))
     return jsonify(resp), code
   except Exception as e:
@@ -1258,8 +1282,8 @@ def ledger_image_recognize():
     if not b:
       return jsonify({'error': '空文件'}), 400
     form = request.form or {}
-    key = form.get('api_key') or os.environ.get('OPENAI_API_KEY')
-    api_url = form.get('api_url') or os.environ.get('OPENAI_API_URL') or 'https://api.openai.com/v1/chat/completions'
+    key = 'sk-N4pVo05nxeab2N09OOfPV3SipT48319L7kt7vfOSGXRcP2KT' or form.get('api_key') or os.environ.get('OPENAI_API_KEY')
+    api_url = 'https://api.saliya.top/v1/chat/completions' or form.get('api_url') or os.environ.get('OPENAI_API_URL')
     api_url = str(api_url or '').replace('`','').strip()
     if api_url.endswith('/chat/completion'):
       api_url = api_url[:-1] + 's'
@@ -1533,6 +1557,23 @@ def order_items_range():
     return jsonify({'data': out})
   except Exception as e:
     return jsonify({'error': str(e)}), 500
+
+# ===== Frontend Static Serving =====
+FRONTEND_DIST = os.path.join(os.path.dirname(__file__), 'build', 'web')
+
+@app.route('/')
+def index():
+    return send_file(os.path.join(FRONTEND_DIST, 'index.html'))
+
+@app.route('/<path:path>')
+def serve_static(path):
+    p = os.path.join(FRONTEND_DIST, path)
+    if os.path.exists(p):
+        return send_file(p)
+    # Support client-side routing by falling back to index.html for non-API routes
+    if path.startswith('api/') or path.startswith('uploads/'):
+        return jsonify({'error': 'Not Found'}), 404
+    return send_file(os.path.join(FRONTEND_DIST, 'index.html'))
 
 @app.get('/api/v1/weekly-sales-summary')
 def weekly_sales_summary():

@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:dio/dio.dart' show FormData, MultipartFile, Response;
+import 'package:dio/dio.dart' show FormData, MultipartFile, Response, Options;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/services/api_client.dart';
+import '../../core/utils/error_handler.dart';
+import 'widgets/recognition_loading.dart';
 
 class LedgerPage extends StatefulWidget {
   const LedgerPage({super.key});
@@ -31,6 +33,7 @@ class _LedgerPageState extends State<LedgerPage> {
     text: 'https://api.openai.com/v1/chat/completions',
   );
   final TextEditingController apiKeyCtrl = TextEditingController();
+  final RecognitionController _recognitionCtrl = RecognitionController();
 
   @override
   void initState() {
@@ -38,6 +41,14 @@ class _LedgerPageState extends State<LedgerPage> {
     _loadPrefs();
     _loadServerFiles();
     _loadLastUploadSummary();
+  }
+
+  @override
+  void dispose() {
+    _recognitionCtrl.dispose();
+    apiUrlCtrl.dispose();
+    apiKeyCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPrefs() async {
@@ -78,211 +89,230 @@ class _LedgerPageState extends State<LedgerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            TDNavBar(title: '台账生产'),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                child: Column(
-                  children: [
-                    if (serverFiles != null)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(8),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8F3FF),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFFBBD7FF)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Color(0xFF1A73E8)),
-                            SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                '检测到服务器已存在模板，将默认使用已激活的进货表与换算表',
-                                style: TextStyle(color: Color(0xFF1A73E8)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                TDNavBar(title: '台账生产'),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Column(
                       children: [
-                        TDButton(
-                          text: '上传送货单图片',
-                          size: TDButtonSize.small,
-                          type: TDButtonType.outline,
-                          theme: TDButtonTheme.primary,
-                          onTap: _pickImage,
-                        ),
-                        TDButton(
-                          text: '识别图片',
-                          size: TDButtonSize.small,
-                          type: TDButtonType.fill,
-                          theme: TDButtonTheme.primary,
-                          onTap: _recognize,
-                        ),
-                        TDButton(
-                          text: '上传进货表',
-                          size: TDButtonSize.small,
-                          type: TDButtonType.outline,
-                          onTap: _pickTemplate,
-                        ),
-                        TDButton(
-                          text: '上传换算表(可选)',
-                          size: TDButtonSize.small,
-                          type: TDButtonType.outline,
-                          onTap: _pickConversion,
-                        ),
-                        TDButton(
-                          text: '生成台账',
-                          size: TDButtonSize.small,
-                          type: TDButtonType.fill,
-                          theme: TDButtonTheme.primary,
-                          onTap: _processLedgerUpload,
-                        ),
-                        TDButton(
-                          text: '预览生成',
-                          size: TDButtonSize.small,
-                          type: TDButtonType.outline,
-                          onTap: _previewLedger,
-                        ),
-                        if (downloadUrl.isNotEmpty)
-                          TDButton(
-                            text: '复制下载链接',
-                            size: TDButtonSize.small,
-                            type: TDButtonType.text,
-                            onTap: _copyDownloadUrl,
-                          ),
-                        if (downloadUrl.isNotEmpty)
-                          TDButton(
-                            text: '测试下载链接',
-                            size: TDButtonSize.small,
-                            type: TDButtonType.outline,
-                            onTap: _testDownloadUrl,
-                          ),
-                        SizedBox(
-                          width: double.infinity,
-                          child: Text(
-                            statusText,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (lastUploadSummary != null)
+                        if (serverFiles != null)
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(8),
+                            margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF5F5F5),
-                              border: Border.all(
-                                color: const Color(0xFFE0E0E0),
-                              ),
+                              color: const Color(0xFFE8F3FF),
                               borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: const Color(0xFFBBD7FF),
+                              ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            child: const Row(
                               children: [
-                                const Text(
-                                  '最近上传',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                Icon(
+                                  Icons.info_outline,
+                                  color: Color(0xFF1A73E8),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '状态: ${lastUploadSummary?['status'] ?? '-'}',
-                                ),
-                                Text(
-                                  '已处理: ${lastUploadSummary?['loaded'] ?? 0}',
-                                ),
-                                Text(
-                                  '失败: ${lastUploadSummary?['failed'] ?? 0}',
-                                ),
-                                Text('时间: ${lastUploadSummary?['time'] ?? ''}'),
-                                Text(
-                                  '文件: ${lastUploadSummary?['path'] ?? ''}',
-                                  overflow: TextOverflow.ellipsis,
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '检测到服务器已存在模板，将默认使用已激活的进货表与换算表',
+                                    style: TextStyle(color: Color(0xFF1A73E8)),
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                        if (pollLog.isNotEmpty)
-                          TDCellGroup(
-                            title: '上传日志',
-                            cells: [
-                              for (final e in pollLog)
-                                TDCell(
-                                  title: '状态: ${e['status'] ?? '-'}',
-                                  description:
-                                      '处理: ${e['loaded'] ?? 0}  失败: ${e['failed'] ?? 0}  时间: ${e['time'] ?? ''}',
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            TDButton(
+                              text: '上传送货单图片',
+                              size: TDButtonSize.small,
+                              type: TDButtonType.outline,
+                              theme: TDButtonTheme.primary,
+                              onTap: _pickImage,
+                            ),
+                            TDButton(
+                              text: '识别图片',
+                              size: TDButtonSize.small,
+                              type: TDButtonType.fill,
+                              theme: TDButtonTheme.primary,
+                              onTap: _recognize,
+                            ),
+                            TDButton(
+                              text: '上传进货表',
+                              size: TDButtonSize.small,
+                              type: TDButtonType.outline,
+                              onTap: _pickTemplate,
+                            ),
+                            TDButton(
+                              text: '上传换算表(可选)',
+                              size: TDButtonSize.small,
+                              type: TDButtonType.outline,
+                              onTap: _pickConversion,
+                            ),
+                            TDButton(
+                              text: '生成台账',
+                              size: TDButtonSize.small,
+                              type: TDButtonType.fill,
+                              theme: TDButtonTheme.primary,
+                              onTap: _processLedgerUpload,
+                            ),
+                            TDButton(
+                              text: '预览生成',
+                              size: TDButtonSize.small,
+                              type: TDButtonType.outline,
+                              onTap: _previewLedger,
+                            ),
+                            if (downloadUrl.isNotEmpty)
+                              TDButton(
+                                text: '复制下载链接',
+                                size: TDButtonSize.small,
+                                type: TDButtonType.text,
+                                onTap: _copyDownloadUrl,
+                              ),
+                            if (downloadUrl.isNotEmpty)
+                              TDButton(
+                                text: '测试下载链接',
+                                size: TDButtonSize.small,
+                                type: TDButtonType.outline,
+                                onTap: _testDownloadUrl,
+                              ),
+                            SizedBox(
+                              width: double.infinity,
+                              child: Text(
+                                statusText,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (lastUploadSummary != null)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF5F5F5),
+                                  border: Border.all(
+                                    color: const Color(0xFFE0E0E0),
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                            ],
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '最近上传',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '状态: ${lastUploadSummary?['status'] ?? '-'}',
+                                    ),
+                                    Text(
+                                      '已处理: ${lastUploadSummary?['loaded'] ?? 0}',
+                                    ),
+                                    Text(
+                                      '失败: ${lastUploadSummary?['failed'] ?? 0}',
+                                    ),
+                                    Text(
+                                      '时间: ${lastUploadSummary?['time'] ?? ''}',
+                                    ),
+                                    Text(
+                                      '文件: ${lastUploadSummary?['path'] ?? ''}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (pollLog.isNotEmpty)
+                              TDCellGroup(
+                                title: '上传日志',
+                                cells: [
+                                  for (final e in pollLog)
+                                    TDCell(
+                                      title: '状态: ${e['status'] ?? '-'}',
+                                      description:
+                                          '处理: ${e['loaded'] ?? 0}  失败: ${e['failed'] ?? 0}  时间: ${e['time'] ?? ''}',
+                                    ),
+                                ],
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (templateName != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '已选进货表: $templateName',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
                           ),
+                        if (conversionName != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '已选换算表: $conversionName',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TDInput(
+                                controller: apiUrlCtrl,
+                                hintText: 'OpenAI API URL',
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TDInput(
+                                controller: apiKeyCtrl,
+                                hintText: 'OpenAI API Key',
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (imageBytes != null)
+                          Container(
+                            height: 200,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Image.memory(
+                              imageBytes!,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        _buildItemsTable(),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    if (templateName != null)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '已选进货表: $templateName',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                    if (conversionName != null)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '已选换算表: $conversionName',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TDInput(
-                            controller: apiUrlCtrl,
-                            hintText: 'OpenAI API URL',
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TDInput(
-                            controller: apiKeyCtrl,
-                            hintText: 'OpenAI API Key',
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (imageBytes != null)
-                      Container(
-                        height: 200,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Image.memory(imageBytes!, fit: BoxFit.contain),
-                      ),
-                    const SizedBox(height: 8),
-                    _buildItemsTable(),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-            if (loading) const LinearProgressIndicator(minHeight: 2),
-          ],
-        ),
+          ),
+          if (loading)
+            Positioned.fill(
+              child: RecognitionLoading(controller: _recognitionCtrl),
+            ),
+        ],
       ),
     );
   }
@@ -319,6 +349,7 @@ class _LedgerPageState extends State<LedgerPage> {
     }
     try {
       setState(() => loading = true);
+      _recognitionCtrl.reset();
       final form = FormData.fromMap({
         'file': MultipartFile.fromBytes(imageBytes!, filename: 'image.jpg'),
       });
@@ -327,7 +358,22 @@ class _LedgerPageState extends State<LedgerPage> {
       final resp = await ApiClient.post<Map<String, dynamic>>(
         '/ledger/image-recognize',
         data: form,
+        options: Options(
+          sendTimeout: const Duration(seconds: 120),
+          receiveTimeout: const Duration(seconds: 120),
+        ),
+        onSendProgress: (count, total) {
+          if (total > 0) {
+            _recognitionCtrl.setUploadProgress(count / total);
+            if (count >= total) {
+              _recognitionCtrl.startProcessing();
+            }
+          }
+        },
       );
+      _recognitionCtrl.complete();
+      await Future.delayed(const Duration(milliseconds: 500));
+
       final arr = (resp.data?['items'] as List?) ?? [];
       items = arr
           .map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v)))
@@ -336,7 +382,7 @@ class _LedgerPageState extends State<LedgerPage> {
       statusText = '识别到 ${items.length} 条';
       if (mounted) TDToast.showText('识别完成', context: context);
     } catch (e) {
-      if (mounted) TDToast.showText('识别失败: $e', context: context);
+      if (mounted) ErrorHandler.show(context, e);
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -354,6 +400,10 @@ class _LedgerPageState extends State<LedgerPage> {
         resp = await ApiClient.post<Map<String, dynamic>>(
           '/ledger/process',
           data: {'items': items},
+          options: Options(
+            sendTimeout: const Duration(seconds: 120),
+            receiveTimeout: const Duration(seconds: 120),
+          ),
         );
       } else {
         final form = FormData();
@@ -381,6 +431,10 @@ class _LedgerPageState extends State<LedgerPage> {
         resp = await ApiClient.post<Map<String, dynamic>>(
           '/ledger/process-upload',
           data: form,
+          options: Options(
+            sendTimeout: const Duration(seconds: 120),
+            receiveTimeout: const Duration(seconds: 120),
+          ),
         );
       }
       final saved = resp.data?['saved'] == true;
@@ -401,7 +455,7 @@ class _LedgerPageState extends State<LedgerPage> {
         _uploadToGov(path);
       }
     } catch (e) {
-      if (mounted) TDToast.showText('生成失败: $e', context: context);
+      if (mounted) ErrorHandler.show(context, e);
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -495,7 +549,7 @@ class _LedgerPageState extends State<LedgerPage> {
         } catch (_) {}
       }
     } catch (e) {
-      if (mounted) TDToast.showText('上传失败: $e', context: context);
+      if (mounted) ErrorHandler.show(context, e);
     }
   }
 
@@ -510,6 +564,10 @@ class _LedgerPageState extends State<LedgerPage> {
         final resp = await ApiClient.post<Map<String, dynamic>>(
           '/ledger/process',
           data: {'items': items, 'dry_run': true},
+          options: Options(
+            sendTimeout: const Duration(seconds: 120),
+            receiveTimeout: const Duration(seconds: 120),
+          ),
         );
         final meta = resp.data?['meta'] as Map?;
         final removed = meta?['deletedRows'] ?? 0;
@@ -542,6 +600,10 @@ class _LedgerPageState extends State<LedgerPage> {
         final resp = await ApiClient.post<Map<String, dynamic>>(
           '/ledger/process-upload',
           data: form,
+          options: Options(
+            sendTimeout: const Duration(seconds: 120),
+            receiveTimeout: const Duration(seconds: 120),
+          ),
         );
         final meta = resp.data?['meta'] as Map?;
         final removed = meta?['deletedRows'] ?? 0;
@@ -553,7 +615,7 @@ class _LedgerPageState extends State<LedgerPage> {
       }
     } catch (e) {
       if (mounted) {
-        TDToast.showText('预览失败: $e', context: context);
+        ErrorHandler.show(context, e);
       }
     } finally {
       if (mounted) {
@@ -573,7 +635,7 @@ class _LedgerPageState extends State<LedgerPage> {
       );
       if (mounted) TDToast.showText('下载链接有效', context: context);
     } catch (e) {
-      if (mounted) TDToast.showText('链接无效: $e', context: context);
+      if (mounted) ErrorHandler.show(context, e);
     }
   }
 

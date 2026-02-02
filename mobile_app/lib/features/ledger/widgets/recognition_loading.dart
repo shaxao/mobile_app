@@ -22,11 +22,8 @@ class RecognitionController extends ValueNotifier<RecognitionState> {
     final scaled = p * 0.4;
     // Don't go backwards if we already started processing
     if (scaled < value.progress && value.progress > 0.4) return;
-    
-    value = RecognitionState(
-      scaled,
-      '正在上传图片... ${(p * 100).toInt()}%',
-    );
+
+    value = RecognitionState(scaled, '正在上传图片... ${(p * 100).toInt()}%');
   }
 
   void startProcessing() {
@@ -42,7 +39,7 @@ class RecognitionController extends ValueNotifier<RecognitionState> {
       // Random speed factor
       // Base speed decreases as we get closer to 0.95 (Zeno's paradox)
       final remaining = 0.95 - _currentProcessingProgress;
-      final noise = 0.02 + _random.nextDouble() * 0.05; 
+      final noise = 0.02 + _random.nextDouble() * 0.05;
       final step = remaining * noise;
 
       _currentProcessingProgress += step;
@@ -80,11 +77,8 @@ class RecognitionController extends ValueNotifier<RecognitionState> {
 
 class RecognitionLoading extends StatefulWidget {
   final RecognitionController controller;
-  
-  const RecognitionLoading({
-    super.key,
-    required this.controller,
-  });
+
+  const RecognitionLoading({super.key, required this.controller});
 
   @override
   State<RecognitionLoading> createState() => _RecognitionLoadingState();
@@ -172,8 +166,9 @@ class _RecognitionLoadingState extends State<RecognitionLoading>
                       value: state.progress,
                       minHeight: 12,
                       backgroundColor: const Color(0xFFF2F3F5),
-                      valueColor:
-                          const AlwaysStoppedAnimation<Color>(Color(0xFF0052D9)),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Color(0xFF0052D9),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),

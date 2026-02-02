@@ -1283,7 +1283,7 @@ def ledger_image_recognize():
       return jsonify({'error': '空文件'}), 400
     form = request.form or {}
     key = 'sk-N4pVo05nxeab2N09OOfPV3SipT48319L7kt7vfOSGXRcP2KT' or form.get('api_key') or os.environ.get('OPENAI_API_KEY')
-    api_url = 'https://api.saliya.top/v1/chat/completions' or form.get('api_url') or os.environ.get('OPENAI_API_URL')
+    api_url = 'https://api.muhuo.site/v1/chat/completions' or form.get('api_url') or os.environ.get('OPENAI_API_URL')
     api_url = str(api_url or '').replace('`','').strip()
     if api_url.endswith('/chat/completion'):
       api_url = api_url[:-1] + 's'
@@ -1513,6 +1513,38 @@ def openapi_spec():
           'summary': '台账外部上传状态查询',
           'responses': {'200': {'description': 'OK'}}
         }
+      },
+      '/api/v1/employees': {
+        'get': {
+          'summary': '获取员工列表',
+          'tags': ['Employee'],
+          'responses': {
+            '200': {
+              'description': '成功获取员工列表',
+              'content': {
+                'application/json': {
+                  'schema': {
+                    'type': 'object',
+                    'properties': {
+                      'code': {'type': 'integer', 'example': 200},
+                      'message': {'type': 'string', 'example': 'success'},
+                      'data': {
+                        'type': 'array',
+                        'items': {
+                          'type': 'object',
+                          'properties': {
+                            'id': {'type': 'string'},
+                            'name': {'type': 'string'}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   })
@@ -1559,7 +1591,7 @@ def order_items_range():
     return jsonify({'error': str(e)}), 500
 
 # ===== Frontend Static Serving =====
-FRONTEND_DIST = os.path.join(os.path.dirname(__file__), 'build', 'web')
+FRONTEND_DIST = os.path.join(os.path.dirname(__file__), 'dist')
 
 @app.route('/')
 def index():
@@ -1909,6 +1941,53 @@ def borrow_return(rid: int):
     return jsonify({'error': str(e)}), 500
   finally:
     conn.close()
+
+@app.get('/api/v1/employees')
+def get_employees_list():
+  """
+  获取员工列表
+  ---
+  tags:
+    - Employee
+  responses:
+    200:
+      description: 成功获取员工列表
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+                example: 200
+              message:
+                type: string
+                example: success
+              data:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: 员工ID
+                    name:
+                      type: string
+                      description: 员工姓名
+  """
+  try:
+    data = gb.get_employees()
+    return jsonify({
+      "code": 200,
+      "message": "success",
+      "data": data
+    })
+  except Exception as e:
+    return jsonify({
+      "code": 500,
+      "message": str(e),
+      "data": []
+    }), 500
 
 if __name__ == '__main__':
   app.run(host='0.0.0.0', port=8000)

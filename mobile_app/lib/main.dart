@@ -19,16 +19,17 @@ class MyApp extends StatelessWidget {
     final router = createRouter();
     return MaterialApp.router(
       title: '萨莉亚移动端',
-      theme: ThemeData(extensions: [TDThemeData.defaultData()], colorScheme: ColorScheme.fromSeed(seedColor: Colors.green)),
+      theme: ThemeData(
+        extensions: [TDThemeData.defaultData()],
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+      ),
       routerConfig: router,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('zh', 'CN'),
-      ],
+      supportedLocales: const [Locale('zh', 'CN')],
     );
   }
 }

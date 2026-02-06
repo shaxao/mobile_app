@@ -90,3 +90,23 @@ class RecipeItem(Base):
     order_index = Column(Integer, default=0)
     version = relationship("RecipeVersion", back_populates="items")
     ingredient = relationship("Ingredient")
+
+class VoiceReminder(Base):
+    __tablename__ = "voice_reminders"
+    id = Column(Integer, primary_key=True)
+    time = Column(String(8), nullable=False)  # Format: "HH:MM"
+    content = Column(String(512), nullable=False)
+    enabled = Column(Boolean, default=True)
+    reminder_type = Column(String(32), default='ai_voice')  # 'system', 'ai_voice', 'custom_audio'
+    voice_model = Column(String(32), default='tts-1')  # 'tts-1', 'tts-1-hd'
+    audio_file_path = Column(String(512))  # Path to custom audio file
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+    id = Column(Integer, primary_key=True)
+    endpoint = Column(String(512), nullable=False)
+    p256dh_key = Column(String(256), nullable=False)
+    auth_key = Column(String(256), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

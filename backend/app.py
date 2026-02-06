@@ -1,21 +1,20 @@
 from flask import Flask, jsonify, request, send_file, Response
 from flask_cors import CORS
-import os, sys
+import os, sys, json, base64, time, threading, sqlite3
 from datetime import datetime, timedelta
+from typing import List, Dict, Any
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
+
 try:
   from openpyxl import load_workbook
 except Exception:
   load_workbook = None
-import base64
-import time
-import threading
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import getBanBiao as gb
 from menu_system.api import bp as menu_bp
 from menu_system.services import init_db as menu_init_db
-from datetime import datetime, timedelta
-import sqlite3
-from typing import List, Dict, Any
 
 app = Flask(__name__)
 CORS(app)
@@ -1513,38 +1512,6 @@ def openapi_spec():
           'summary': '台账外部上传状态查询',
           'responses': {'200': {'description': 'OK'}}
         }
-      },
-      '/api/v1/employees': {
-        'get': {
-          'summary': '获取员工列表',
-          'tags': ['Employee'],
-          'responses': {
-            '200': {
-              'description': '成功获取员工列表',
-              'content': {
-                'application/json': {
-                  'schema': {
-                    'type': 'object',
-                    'properties': {
-                      'code': {'type': 'integer', 'example': 200},
-                      'message': {'type': 'string', 'example': 'success'},
-                      'data': {
-                        'type': 'array',
-                        'items': {
-                          'type': 'object',
-                          'properties': {
-                            'id': {'type': 'string'},
-                            'name': {'type': 'string'}
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
       }
     }
   })
@@ -1799,8 +1766,73 @@ def attendance():
 
 @app.get('/api/v1/revenue')
 def revenue():
-  data = gb.get_revenue()
+  try:
+    data = gb.get_revenue()
+  except Exception as e:
+    print(f"Error fetching revenue: {e}")
+    data = ""
   return jsonify({'revenue': data})
+
+@app.get('/api/v1/hourly-sales')
+def hourly_sales():
+    from menu_system.db import SessionLocal
+    from menu_system.models import HourlySalesSnapshot
+    
+    date_param = request.args.get('date')
+    if not date_param:
+        date_param = datetime.now().strftime('%Y-%m-%d')
+    
+    # Normalize date to YYYYMMDD
+    try:
+        if '-' in date_param:
+            dt_obj = datetime.strptime(date_param, '%Y-%m-%d')
+            date_str = dt_obj.strftime('%Y%m%d')
+        else:
+            date_str = date_param
+    except:
+        return jsonify({'error': 'Invalid date format'}), 400
+
+    out = []
+    try:
+        with SessionLocal() as s:
+            snapshots = s.query(HourlySalesSnapshot).filter_by(date=date_str).order_by(HourlySalesSnapshot.hour).all()
+            
+            # Calculate hourly delta
+            prev_cumulative = 0.0
+            # Sort by hour just in case
+            snapshots.sort(key=lambda x: x.hour)
+            
+            for snap in snapshots:
+                # If hour is 10 (start), previous is 0.
+                # If we missed an hour (e.g. have 10 and 12), the delta for 12 will be (12 - 10), which is correct (sales during 10-12).
+                # But we label it as "12".
+                
+                # Logic:
+                # hour 10: sales up to 10.
+                # hour 11: sales between 10 and 11.
+                
+                # However, if we missed 10, and first is 11. 
+                # Then 11 is (sales up to 11).
+                # So we just subtract the previous snapshot's cumulative.
+                
+                # Special handling: If this is the very first snapshot of the day, and it's later than 10 (e.g. 12),
+                # we assume previous is 0. So 12 will contain all sales up to 12.
+                
+                delta = snap.cumulative_sales - prev_cumulative
+                if delta < 0: delta = 0 # Should not happen unless refund > sales
+                
+                out.append({
+                    'hour': snap.hour,
+                    'sales': delta, 
+                    'cumulative': snap.cumulative_sales,
+                    'created_at': snap.created_at.isoformat() if snap.created_at else None
+                })
+                prev_cumulative = snap.cumulative_sales
+                
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        
+    return jsonify({'date': date_str, 'data': out})
 
 
 def _db_path() -> str:
@@ -1989,5 +2021,501 @@ def get_employees_list():
       "data": []
     }), 500
 
+@app.get('/api/v1/voice-reminders')
+def voice_reminders_get():
+    from menu_system.services import get_voice_reminders
+    reminders = get_voice_reminders()
+    return jsonify([
+        {
+            'id': r.id,
+            'time': r.time,
+            'content': r.content,
+            'enabled': r.enabled,
+            'reminder_type': getattr(r, 'reminder_type', 'ai_voice'),
+            'voice_model': getattr(r, 'voice_model', 'tts-1'),
+            'audio_file_path': getattr(r, 'audio_file_path', None)
+        }
+        for r in reminders
+    ])
+
+@app.get('/api/v1/tts-models')
+def get_tts_models():
+    """获取可用的 TTS 模型列表"""
+    models = [
+        {
+            'id': 'tts-1',
+            'name': 'TTS-1 (标准)',
+            'description': '速度快，成本低',
+            'speed': '快',
+            'quality': '标准'
+        },
+        {
+            'id': 'tts-1-hd',
+            'name': 'TTS-1-HD (高清)',
+            'description': '音质更好，速度稍慢',
+            'speed': '慢',
+            'quality': '高清'
+        }
+    ]
+    return jsonify({'models': models})
+
+@app.post('/api/v1/voice-reminders')
+def voice_reminders_create():
+    from menu_system.services import create_voice_reminder
+    body = request.json or {}
+    time = body.get('time')
+    content = body.get('content')
+    if not time or not content:
+        return jsonify({'error': 'Missing time or content'}), 400
+    
+    r = create_voice_reminder(
+        time=time,
+        content=content,
+        reminder_type=body.get('reminder_type', 'ai_voice'),
+        voice_model=body.get('voice_model', 'tts-1'),
+        audio_file_path=body.get('audio_file_path')
+    )
+    
+    return jsonify({
+        'id': r.id,
+        'time': r.time,
+        'content': r.content,
+        'enabled': r.enabled,
+        'reminder_type': getattr(r, 'reminder_type', 'ai_voice'),
+        'voice_model': getattr(r, 'voice_model', 'tts-1'),
+        'audio_file_path': getattr(r, 'audio_file_path', None)
+    }), 201
+
+@app.post('/api/v1/voice-reminders/batch')
+def voice_reminders_batch_create():
+    from menu_system.services import batch_create_voice_reminders
+    body = request.json or {}
+    items = body.get('items')
+    if not items or not isinstance(items, list):
+        return jsonify({'error': 'Missing items or items is not a list'}), 400
+    results = batch_create_voice_reminders(items)
+    return jsonify([
+        {'id': r.id, 'time': r.time, 'content': r.content, 'enabled': r.enabled}
+        for r in results
+    ]), 201
+
+@app.patch('/api/v1/voice-reminders/<int:rid>')
+def voice_reminders_update(rid):
+    from menu_system.services import update_voice_reminder
+    body = request.json or {}
+    r = update_voice_reminder(
+        rid,
+        time=body.get('time'),
+        content=body.get('content'),
+        enabled=body.get('enabled'),
+        reminder_type=body.get('reminder_type'),
+        voice_model=body.get('voice_model'),
+        audio_file_path=body.get('audio_file_path')
+    )
+    if not r:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify({
+        'id': r.id,
+        'time': r.time,
+        'content': r.content,
+        'enabled': r.enabled,
+        'reminder_type': getattr(r, 'reminder_type', 'ai_voice'),
+        'voice_model': getattr(r, 'voice_model', 'tts-1'),
+        'audio_file_path': getattr(r, 'audio_file_path', None)
+    })
+
+@app.delete('/api/v1/voice-reminders/<int:rid>')
+def voice_reminders_delete(rid):
+    from menu_system.services import delete_voice_reminder
+    if delete_voice_reminder(rid):
+        return jsonify({'ok': True})
+    return jsonify({'error': 'Not found'}), 404
+
+@app.delete('/api/v1/voice-reminders')
+def voice_reminders_delete_all():
+    from menu_system.services import delete_all_voice_reminders
+    delete_all_voice_reminders()
+    return jsonify({'ok': True})
+
+@app.post('/api/v1/voice-reminders/upload-audio')
+def upload_reminder_audio():
+    """上传自定义音频文件"""
+    import os
+    from werkzeug.utils import secure_filename
+    import time as time_module
+    
+    UPLOAD_FOLDER = 'data/uploads/audio'
+    ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'aac'}
+    
+    def allowed_file(filename):
+        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if file and allowed_file(file.filename):
+        # 确保上传目录存在
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        
+        # 生成唯一文件名
+        timestamp = int(time_module.time() * 1000)
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"reminder_{timestamp}.{ext}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # 保存文件
+        file.save(filepath)
+        
+        # 返回相对路径
+        relative_path = f"/uploads/audio/{filename}"
+        return jsonify({
+            'file_path': relative_path,
+            'filename': filename
+        })
+    
+    return jsonify({'error': 'Invalid file type. Allowed: mp3, wav, ogg, m4a, aac'}), 400
+
+@app.get('/uploads/audio/<filename>')
+def serve_audio(filename):
+    """提供音频文件访问"""
+    from flask import send_from_directory
+    import os
+    UPLOAD_FOLDER = 'data/uploads/audio'
+    return send_from_directory(UPLOAD_FOLDER, filename)
+
+@app.post('/api/v1/push-subscriptions')
+def push_subscriptions_add():
+    from menu_system.services import add_push_subscription
+    body = request.json or {}
+    endpoint = body.get('endpoint')
+    keys = body.get('keys') or {}
+    p256dh = keys.get('p256dh')
+    auth = keys.get('auth')
+    if not endpoint or not p256dh or not auth:
+        return jsonify({'error': 'Missing push data'}), 400
+    add_push_subscription(endpoint, p256dh, auth)
+    return jsonify({'ok': True})
+
+@app.delete('/api/v1/push-subscriptions')
+def push_subscriptions_delete():
+    from menu_system.services import delete_push_subscription
+    body = request.json or {}
+    endpoint = body.get('endpoint')
+    if not endpoint:
+        return jsonify({'error': 'Missing endpoint'}), 400
+    delete_push_subscription(endpoint)
+    return jsonify({'ok': True})
+
+def get_or_create_vapid_keys():
+    vapid_file = os.path.join(UPLOAD_DIR, 'vapid_keys.json')
+    private_pem_file = os.path.join(UPLOAD_DIR, 'vapid_private.pem')
+    
+    if os.path.exists(vapid_file) and os.path.exists(private_pem_file):
+        try:
+            with open(vapid_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                data['private_key_path'] = private_pem_file
+                return data
+        except:
+            pass
+            
+    # Generate P-256 key pair
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    
+    # Export Private Key to PEM (Traditional OpenSSL SEC1 format)
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    
+    _ensure_dir(UPLOAD_DIR)
+    with open(private_pem_file, 'wb') as f:
+        f.write(private_pem)
+        
+    # Export Public Key for frontend
+    public_key = private_key.public_key()
+    public_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.X962,
+        format=serialization.PublicFormat.UncompressedPoint
+    )
+    public_b64url = base64.urlsafe_b64encode(public_bytes).decode('utf-8').rstrip('=')
+    
+    v_data = {
+        'public_key': public_b64url,
+        'private_key': private_pem.decode('utf-8') # Keep for compatibility if needed
+    }
+    
+    with open(vapid_file, 'w', encoding='utf-8') as f:
+        json.dump(v_data, f)
+    
+    v_data['private_key_path'] = private_pem_file
+    return v_data
+
+@app.get('/api/v1/vapid-public-key')
+def vapid_public_key():
+    v_data = get_or_create_vapid_keys()
+    if v_data:
+        return jsonify({'publicKey': v_data['public_key']})
+    return jsonify({'error': 'Failed to handle VAPID keys'}), 500
+
+@app.delete('/api/v1/vapid-keys')
+def reset_vapid_keys():
+    vapid_file = os.path.join(UPLOAD_DIR, 'vapid_keys.json')
+    private_pem_file = os.path.join(UPLOAD_DIR, 'vapid_private.pem')
+    if os.path.exists(vapid_file):
+        os.remove(vapid_file)
+    if os.path.exists(private_pem_file):
+        os.remove(private_pem_file)
+    return jsonify({'ok': True})
+
+def log_push(endpoint, status, message=""):
+    try:
+        log_file = os.path.join(UPLOAD_DIR, 'push_logs.json')
+        _ensure_dir(UPLOAD_DIR)
+        
+        logs = []
+        if os.path.exists(log_file):
+            with open(log_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if content:
+                    logs = json.loads(content)
+        
+        logs.append({
+            'time': datetime.now().strftime('%m-%d %H:%M:%S'),
+            'endpoint': str(endpoint)[:30] + "...",
+            'status': str(status),
+            'message': str(message)
+        })
+        
+        if len(logs) > 30:
+            logs = logs[-30:]
+            
+        with open(log_file, 'w', encoding='utf-8') as f:
+            json.dump(logs, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"CRITICAL: log_push failed: {e}")
+
+def send_web_push(subscription, data):
+    from pywebpush import webpush, WebPushException
+    
+    print(f"DEBUG: Attempting push to {subscription.endpoint[:30]}...")
+    log_push(subscription.endpoint, "Attempt", "Starting push process")
+    
+    v_data = get_or_create_vapid_keys()
+    if not v_data or 'private_key' not in v_data:
+        log_push(subscription.endpoint, "Error", "VAPID keys missing")
+        return
+        
+    try:
+        from urllib.parse import urlparse
+        parsed_url = urlparse(subscription.endpoint)
+        audience = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        
+        webpush(
+            subscription_info={
+                'endpoint': subscription.endpoint,
+                'keys': {
+                    'p256dh': subscription.p256dh,
+                    'auth': subscription.auth
+                }
+            },
+            data=json.dumps(data),
+            # Use the absolute path to the PEM file for maximum reliability
+            vapid_private_key=os.path.abspath(v_data['private_key_path']),
+            vapid_claims={
+                "sub": "mailto:admin@muhuo.site",
+                "aud": audience
+            },
+            ttl=86400
+        )
+        log_push(subscription.endpoint, "Success")
+    except WebPushException as ex:
+        err_msg = f"WebPush Error: {ex}"
+        if ex.response is not None:
+            err_msg = f"HTTP {ex.response.status_code}: {ex.response.text}"
+            print(f"DEBUG: Push Failed with response: {ex.response.text}")
+            
+            # Special handling for VapidPkHashMismatch - this means the client MUST re-subscribe
+            if "VapidPkHashMismatch" in ex.response.text:
+                err_msg = "VAPID Key Mismatch: Please click 'Reset System' on your phone"
+                
+        log_push(subscription.endpoint, "Fail", err_msg)
+        if ex.response and (ex.response.status_code in [404, 410] or "VapidPkHashMismatch" in ex.response.text):
+            from menu_system.services import delete_push_subscription
+            delete_push_subscription(subscription.endpoint)
+            print(f"DEBUG: Deleted invalid subscription: {subscription.endpoint[:30]}...")
+    except Exception as e:
+        log_push(subscription.endpoint, "Error", str(e))
+
+@app.get('/api/v1/push-logs')
+def get_push_logs():
+    log_file = os.path.join(UPLOAD_DIR, 'push_logs.json')
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return jsonify(data if isinstance(data, list) else [])
+        except Exception as e:
+            print(f"Error reading push logs: {e}")
+            return jsonify([{'time': 'Error', 'status': 'Error', 'message': str(e)}])
+    return jsonify([])
+
+@app.post('/api/v1/test-push')
+def test_push_now():
+    from menu_system.db import SessionLocal
+    from menu_system.models import PushSubscription
+    with SessionLocal() as s:
+        subs = s.query(PushSubscription).all()
+        if not subs:
+            return jsonify({'error': 'No subscriptions found'}), 404
+        for sub in subs:
+            send_web_push(sub, {
+                'title': '推送测试',
+                'body': '看到这条消息说明推送配置正确！',
+                'type': 'test'
+            })
+    return jsonify({'ok': True, 'count': len(subs)})
+
+def reminder_scheduler_task():
+    from menu_system.db import SessionLocal
+    from menu_system.models import VoiceReminder, PushSubscription
+    import time
+    
+    print("Reminder scheduler task started.")
+    last_checked_minute = ""
+    
+    while True:
+        try:
+            # Use CST (China Standard Time) or local time properly
+            # iOS users are in China, so we assume UTC+8 if server is UTC
+            # Or just use the server's system time if it's already set to China time
+            now = datetime.now()
+            
+            # If server is in UTC, add 8 hours to match user's China time
+            # Check if current hour is logically consistent with restaurant hours
+            # If server time is 0-14, it might be UTC. China 8-22 is UTC 0-14.
+            # This is a heuristic, better to use pytz if available.
+            # Let's try to detect if server is UTC
+            if time.tzname[0] == 'UTC':
+                now = now + timedelta(hours=8)
+                
+            current_hm = now.strftime('%H:%M')
+            
+            if current_hm != last_checked_minute:
+                last_checked_minute = current_hm
+                
+                with SessionLocal() as s:
+                    # Find enabled reminders for this minute
+                    reminders = s.query(VoiceReminder).filter_by(time=current_hm, enabled=True).all()
+                    
+                    if reminders:
+                        subscriptions = s.query(PushSubscription).all()
+                        for r in reminders:
+                            print(f"Pushing reminder: {r.content}")
+                            for sub in subscriptions:
+                                # Send push notification
+                                send_web_push(sub, {
+                                    'title': '食材过期提醒',
+                                    'body': r.content,
+                                    'type': 'voice_reminder'
+                                })
+            
+            time.sleep(10)
+        except Exception as e:
+            print(f"Reminder scheduler error: {e}")
+            time.sleep(10)
+
+def revenue_scheduler_task():
+  from menu_system.db import SessionLocal
+  from menu_system.models import RevenueData, HourlySalesSnapshot
+  import time
+  
+  print("Revenue scheduler task started.")
+  while True:
+    try:
+      now = datetime.now()
+      # Fetch between 10:00 and 22:00
+      if 10 <= now.hour <= 22:
+        should_run = False
+        today_str = now.strftime('%Y%m%d')
+        current_hour = now.hour
+        
+        # 1. Update RevenueData (Snapshot for /api/v1/revenue) - Keep existing logic to update every 50 mins or so
+        # Actually, let's just piggyback on the hourly schedule for simplicity, OR keep it frequent?
+        # User requirement: "Automatically trigger once every hour on the hour"
+        # So we should strictly follow that for the HourlySalesSnapshot.
+        
+        # Check if we have snapshot for this hour
+        has_snapshot = False
+        try:
+          with SessionLocal() as s:
+             snap = s.query(HourlySalesSnapshot).filter_by(date=today_str, hour=current_hour).first()
+             if snap:
+               has_snapshot = True
+        except Exception as e:
+           print(f"Scheduler DB check error: {e}")
+        
+        # Run if it's the start of the hour (minute < 5) and we don't have a snapshot yet
+        # Retry mechanism is implicit: if we fail, we wait 60s and try again (minute still < 5)
+        # If we miss the 5 min window, we miss the data.
+        if now.minute < 5 and not has_snapshot:
+             should_run = True
+        
+        # Also run if it's 10:00 and we have no data at all? 
+        # No, just stick to the schedule.
+
+        if should_run:
+          print(f"Scheduler fetching revenue data at {now}")
+          data_str = gb.get_revenue()
+          
+          # Parse cumulative sales
+          # data_str is like "12345" or "12345, 67890"
+          cumulative_val = 0.0
+          try:
+             parts = str(data_str).split(',')
+             val_str = parts[0].strip()
+             cumulative_val = float(val_str)
+          except:
+             cumulative_val = 0.0
+
+          with SessionLocal() as s:
+            # 1. Save Hourly Snapshot
+            # Double check inside transaction
+            existing = s.query(HourlySalesSnapshot).filter_by(date=today_str, hour=current_hour).first()
+            if not existing:
+                new_snap = HourlySalesSnapshot(
+                    date=today_str, 
+                    hour=current_hour, 
+                    cumulative_sales=cumulative_val,
+                    created_at=datetime.utcnow()
+                )
+                s.add(new_snap)
+            
+            # 2. Update Latest RevenueData (for legacy support)
+            rd = s.query(RevenueData).filter(RevenueData.date == today_str).first()
+            if not rd:
+              rd = RevenueData(date=today_str)
+              s.add(rd)
+            rd.raw_data = data_str
+            rd.updated_at = datetime.utcnow()
+            
+            s.commit()
+            print(f"Revenue data saved for {today_str} {current_hour}:00")
+      
+      # Check every minute to ensure we catch the "minute < 5" window
+      time.sleep(60)
+    except Exception as e:
+      print(f"Scheduler error: {e}")
+      time.sleep(60)
+
 if __name__ == '__main__':
+  t1 = threading.Thread(target=revenue_scheduler_task, daemon=True)
+  t1.start()
+  t2 = threading.Thread(target=reminder_scheduler_task, daemon=True)
+  t2.start()
   app.run(host='0.0.0.0', port=8000)

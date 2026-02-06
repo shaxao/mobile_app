@@ -1,0 +1,20 @@
+{
+  "active_template": "/opt/saliya/data/data/上海萨莉亚餐饮有限公司_餐饮_202511.xlsx",
+  "active_conversion": "/opt/saliya/data/../食品台账换算千克数 202510.xlsx",
+  "files": {
+    "templates": [
+      {
+        "name": "上海萨莉亚餐饮有限公司_餐饮_202511.xlsx",
+        "path": "/opt/saliya/data/data/上海萨莉亚餐饮有限公司_餐饮_202511.xlsx",
+        "uploadedAt": "2025-12-16T14:15:34.079529"
+      }
+    ],
+    "conversions": [
+      {
+        "name": "食品台账换算千克数 202510.xlsx",
+        "path": "/opt/saliya/data/../食品台账换算千克数 202510.xlsx",
+        "uploadedAt": "2025-12-16T14:15:34.079542"
+      }
+    ]
+  }
+}

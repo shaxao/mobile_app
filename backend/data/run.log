@@ -1,0 +1,21 @@
+nohup: ignoring input
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8000
+ * Running on http://154.36.184.141:8000
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [16/Dec/2025 20:12:40] "[33mGET /robots.txt HTTP/1.1[0m" 404 -
+127.0.0.1 - - [16/Dec/2025 21:20:52] "GET /api/v1/sort-order HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 21:20:52] "GET /api/v1/order/items HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 21:20:56] "[31m[1mGET /api/v1/staff/daily-schedule?date= HTTP/1.1[0m" 400 -
+127.0.0.1 - - [16/Dec/2025 21:21:02] "GET /api/v1/staff/daily-schedule?date=2025-12-16 HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 21:23:29] "GET /api/v1/staff/daily-schedule?date=2025-12-17 HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 22:14:11] "GET /api/v1/openapi.json HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 22:14:17] "GET /api/v1/ledger/files HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 22:14:31] "GET /uploads/images/img_1765894468_3759.jpg HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 22:14:33] "GET /uploads/images/img_1765894468_3759.jpg HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 22:14:49] "POST /api/v1/ledger/image-recognize HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 22:15:11] "[35m[1mPOST /api/v1/ledger/process-upload HTTP/1.1[0m" 500 -
+127.0.0.1 - - [16/Dec/2025 22:15:20] "[35m[1mPOST /api/v1/ledger/process-upload HTTP/1.1[0m" 500 -
+127.0.0.1 - - [16/Dec/2025 22:15:34] "[35m[1mPOST /api/v1/ledger/process-upload HTTP/1.1[0m" 500 -

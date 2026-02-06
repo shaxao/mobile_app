@@ -286,3 +286,124 @@ def upsert_nutrition(ingredient_name, calories, protein, fat, carbs):
         np.carbs_per_100g = float(carbs or 0)
         s.commit()
         return {"ok": True}
+
+
+# Voice Reminder Services
+def get_voice_reminders():
+    """获取所有语音提醒"""
+    from .models import VoiceReminder
+    with SessionLocal() as s:
+        return s.query(VoiceReminder).all()
+
+def create_voice_reminder(time, content, reminder_type='ai_voice', voice_model='tts-1', audio_file_path=None):
+    """创建语音提醒"""
+    from .models import VoiceReminder
+    with SessionLocal() as s:
+        reminder = VoiceReminder(
+            time=time,
+            content=content,
+            enabled=True,
+            reminder_type=reminder_type,
+            voice_model=voice_model,
+            audio_file_path=audio_file_path
+        )
+        s.add(reminder)
+        s.commit()
+        s.refresh(reminder)
+        return reminder
+
+def batch_create_voice_reminders(items):
+    """批量创建语音提醒"""
+    from .models import VoiceReminder
+    with SessionLocal() as s:
+        reminders = []
+        for item in items:
+            reminder = VoiceReminder(
+                time=item.get('time'),
+                content=item.get('content'),
+                enabled=True,
+                reminder_type=item.get('reminder_type', 'ai_voice'),
+                voice_model=item.get('voice_model', 'tts-1'),
+                audio_file_path=item.get('audio_file_path')
+            )
+            s.add(reminder)
+            reminders.append(reminder)
+        s.commit()
+        for r in reminders:
+            s.refresh(r)
+        return reminders
+
+def update_voice_reminder(rid, time=None, content=None, enabled=None, 
+                         reminder_type=None, voice_model=None, audio_file_path=None):
+    """更新语音提醒"""
+    from .models import VoiceReminder
+    with SessionLocal() as s:
+        reminder = s.get(VoiceReminder, rid)
+        if not reminder:
+            return None
+        
+        if time is not None:
+            reminder.time = time
+        if content is not None:
+            reminder.content = content
+        if enabled is not None:
+            reminder.enabled = enabled
+        if reminder_type is not None:
+            reminder.reminder_type = reminder_type
+        if voice_model is not None:
+            reminder.voice_model = voice_model
+        if audio_file_path is not None:
+            reminder.audio_file_path = audio_file_path
+        
+        s.commit()
+        s.refresh(reminder)
+        return reminder
+
+def delete_voice_reminder(rid):
+    """删除语音提醒"""
+    from .models import VoiceReminder
+    with SessionLocal() as s:
+        reminder = s.get(VoiceReminder, rid)
+        if reminder:
+            s.delete(reminder)
+            s.commit()
+            return True
+        return False
+
+def delete_all_voice_reminders():
+    """删除所有语音提醒"""
+    from .models import VoiceReminder
+    with SessionLocal() as s:
+        s.query(VoiceReminder).delete()
+        s.commit()
+
+def add_push_subscription(endpoint, p256dh, auth):
+    """添加推送订阅"""
+    from .models import PushSubscription
+    with SessionLocal() as s:
+        # 检查是否已存在
+        existing = s.query(PushSubscription).filter_by(endpoint=endpoint).first()
+        if existing:
+            # 更新密钥
+            existing.p256dh_key = p256dh
+            existing.auth_key = auth
+        else:
+            # 创建新订阅
+            subscription = PushSubscription(
+                endpoint=endpoint,
+                p256dh_key=p256dh,
+                auth_key=auth
+            )
+            s.add(subscription)
+        s.commit()
+
+def delete_push_subscription(endpoint):
+    """删除推送订阅"""
+    from .models import PushSubscription
+    with SessionLocal() as s:
+        subscription = s.query(PushSubscription).filter_by(endpoint=endpoint).first()
+        if subscription:
+            s.delete(subscription)
+            s.commit()
+            return True
+        return False
